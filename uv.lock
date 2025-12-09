@@ -3353,6 +3353,7 @@ plugins = [
     { name = "nomad-parser-plugins-database" },
     { name = "nomad-parser-plugins-electronic" },
     { name = "nomad-parser-plugins-workflow" },
+    { name = "nomad-plugin-micromagnetic" },
     { name = "nomad-porous-materials" },
     { name = "nomad-schema-plugin-run" },
     { name = "nomad-schema-plugin-simulation-workflow" },
@@ -3387,6 +3388,7 @@ requires-dist = [
     { name = "nomad-parser-plugins-database", marker = "extra == 'plugins'", specifier = ">=1.0" },
     { name = "nomad-parser-plugins-electronic", marker = "extra == 'plugins'", specifier = ">=1.0" },
     { name = "nomad-parser-plugins-workflow", marker = "extra == 'plugins'", specifier = ">=1.0" },
+    { name = "nomad-plugin-micromagnetic", marker = "extra == 'plugins'", git = "https://github.com/CRC270-HoMMage/nomad-plugin-micromagnetic.git?rev=71da18a689521ff7c6236b043bfede554ea8007a" },
     { name = "nomad-porous-materials", marker = "extra == 'plugins'", git = "https://github.com/FAIRmat-NFDI/nomad-porous-materials.git?rev=522f4a3208077f534f1c5e886527ee2104283d0b" },
     { name = "nomad-schema-plugin-run", marker = "extra == 'plugins'", specifier = ">=1.0.1" },
     { name = "nomad-schema-plugin-simulation-workflow", marker = "extra == 'plugins'", specifier = ">=1.0.1" },
@@ -3674,6 +3676,14 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/eb/dd/b7c4abf772923e178cdada36c5eda63e3b7c6520a12e952caa487c4b94dd/nomad_parser_plugins_workflow-1.1.9.tar.gz", hash = "sha256:e0a102249111ca0c49473912d6a20e1b0351ce470631ca78bee79cab664cf88c", size = 31955589, upload-time = "2025-07-30T10:59:41.918Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/1b/a1/9557a4c29e8260d8c0a68b6355580c0f7a0f1fc417469ba19f7e7ba8358f/nomad_parser_plugins_workflow-1.1.9-py3-none-any.whl", hash = "sha256:470bd09786b42d29f57b1f99c89e1891f5a908a54684e0436a2d99b3d44407a7", size = 122439, upload-time = "2025-07-30T10:59:39.457Z" },
+]
+
+[[package]]
+name = "nomad-plugin-micromagnetic"
+version = "0.1.0"
+source = { git = "https://github.com/CRC270-HoMMage/nomad-plugin-micromagnetic.git?rev=71da18a689521ff7c6236b043bfede554ea8007a#71da18a689521ff7c6236b043bfede554ea8007a" }
+dependencies = [
+    { name = "nomad-lab" },
 ]
 
 [[package]]
