@@ -3,11 +3,11 @@ name: Build and publish docker images
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "test-micromagnetics-plugin"]
     # Publish semver tags as releases.
     tags: ["v*.*.*"]
   pull_request:
-    branches: ["main"]
+    branches: ["main", "test-micromagnetics-plugin"]
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 

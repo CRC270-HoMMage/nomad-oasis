@@ -58,6 +58,7 @@ plugins = [
   "nomad-parser-plugins-atomistic>=1.0",
   "nomad-parser-plugins-workflow>=1.0",
   "nomad-parser-plugins-database>=1.0",
+  "nomad-plugin-micromagnetic @ git+https://github.com/CRC270-HoMMage/nomad-plugin-micromagnetic.git@71da18a689521ff7c6236b043bfede554ea8007a",
 ]
 jupyter = ["jupyter-events"]
 gpu-action = []
