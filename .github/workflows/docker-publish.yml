@@ -31,6 +31,8 @@ env:
     pynxtools_igor
     electronicparsers
     nomad_simulations
+    nomad-measurements
+    nomad-plugin-micromagnetic
 
 permissions:
   contents: write
