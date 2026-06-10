@@ -23,16 +23,18 @@ and how to customize it through [adding plugins](#adding-a-plugin).
 
 In this README you will find instructions for:
 1. [Deploying the distribution](#deploying-the-distribution)
-2. [Configuring Worker Replicas and Resource Limits](#configuring-worker-replicas-and-resource-limits)
-3. [Adding a plugin](#adding-a-plugin)
-4. [Using the jupyter image](#the-jupyter-image)
-5. [Automated unit and example upload tests in CI](#automated-unit-and-example-upload-tests-in-ci)
-6. [Setup regular package updates with Dependabot](#set-up-regular-package-updates-with-dependabot)
-7. [Customizing Documentation](#customizing-documentation)
-8. [Backing up the Oasis](#backing-up-the-oasis)
-9. [Enabling NOMAD Actions](#enabling-nomad-actions)
-10. [Updating the distribution from the template](#updating-the-distribution-from-the-template)
-11. [Solving common issues](#faqtrouble-shooting)
+2. [Deploying on Kubernetes (Quick Start)](#deploying-on-kubernetes-quick-start)
+3. [Configuring Worker Replicas and Resource Limits](#configuring-worker-replicas-and-resource-limits)
+4. [Adding a plugin](#adding-a-plugin)
+5. [The jupyter image](#the-jupyter-image)
+6. [Using Docker image via plugin](#using-docker-image-via-plugin)
+7. [Automated unit and example upload tests in CI](#automated-unit-and-example-upload-tests-in-ci)
+8. [Setup regular package updates with Dependabot](#set-up-regular-package-updates-with-dependabot)
+9. [Customizing Documentation](#customizing-documentation)
+10. [Backing up the Oasis](#backing-up-the-oasis)
+11. [Enabling NOMAD Actions](#enabling-nomad-actions)
+12. [Updating the distribution from the template](#updating-the-distribution-from-the-template)
+13. [Solving common issues](#faqtrouble-shooting)
 
 ## Deploying the distribution
 
@@ -113,11 +115,11 @@ Below are instructions for how to deploy this NOMAD Oasis distribution
       For testing, you can create a [self-signed certificate](https://en.wikipedia.org/wiki/Self-signed_certificate). Note that self-signed certificates are not recommended for production since they are not trusted by browsers. You can generate one with:
 
       ```sh
-      mkdir ssl
+      mkdir tls
       openssl req -x509 -nodes -days 365 \
         -newkey rsa:2048 \
-        -keyout ./ssl/selfsigned.key \
-        -out ./ssl/selfsigned.crt \
+        -keyout ./tls/selfsigned.key \
+        -out ./tls/selfsigned.crt \
         -subj "/CN=localhost"
       ```
 
@@ -128,7 +130,8 @@ Below are instructions for how to deploy this NOMAD Oasis distribution
 
    + # HTTPS
    + - ./configs/nginx_https.conf:/etc/nginx/conf.d/default.conf:ro
-   + - ./ssl:/etc/nginx/ssl:ro  # Your certificate files
+   + - ./tls/selfsigned.crt:/etc/nginx/tls/mounted-nomad-oasis.crt:ro  # Path to your TLS certificate
+   + - ./tls/selfsigned.key:/etc/nginx/tls/mounted-nomad-oasis.key:ro  # Path to your TLS private key
    ```
 
 7. And run it with docker compose in detached (--detach or -d) mode
@@ -222,6 +225,8 @@ Adjust these values based on your server's available resources to optimize perfo
 
 ## Adding a plugin
 
+By default, no plugins are included in this distribution. You can find a list of available NOMAD plugins [here](https://nomad-lab.eu/prod/v1/oasis/gui/search/plugins). For a list of official plugins provided by FAIRmat, please see [here](https://github.com/FAIRmat-NFDI/.github/blob/main/profile/README.md). For inspiration, you can also check the list of [plugins that are installed on the production NOMAD deployment hosted by FAIRmat](https://gitlab.mpcdf.mpg.de/nomad-lab/nomad-distro/-/raw/main/pyproject.toml?ref_type=heads).
+
 To add a new plugin to the docker image you should add it to the plugins table in the [`pyproject.toml`](pyproject.toml) file.
 
 Here you can put either plugins distributed to PyPI, e.g.
@@ -230,6 +235,7 @@ Here you can put either plugins distributed to PyPI, e.g.
 [project.optional-dependencies]
 plugins = [
   "nomad-material-processing>=1.0.0",
+  "nomad-north-jupyter>=0.1.0",
 ]
 ```
 
@@ -268,7 +274,7 @@ be generated.
 In addition to the Docker image for running the oasis, this repository also builds a custom NORTH image for running a jupyter hub with the installed plugins.
 This image has been added to the [`configs/nomad.yaml`](configs/nomad.yaml) during the initialization of this repository and should therefore already be available in your Oasis under "Analyze / NOMAD Remote Tools Hub / jupyter"
 
-We currently use `quay.io/jupyter/base-notebook:2025-04-14` as our base image for Jupyter. While it includes the necessary Python packages, it does not come with `R` or `Julia` pre-installed.
+We currently use `quay.io/jupyter/base-notebook:2025-04-14` as our base image for Jupyter (see Dockerfile). While it includes the necessary Python packages, it does not come with `R` or `Julia` pre-installed.
 If you need support for those languages, you can switch to `quay.io/jupyter/datascience-notebook:2025-04-04`, which includes both `R` and `Julia`.
 The Jupyter image does not include `gcc` or `build-essential` by default. If you want to allow users to install Python packages that require compilation while running a notebook, you'll need to install these tools in the [Dockerfile](./Dockerfile#L172) or switch the base image to `quay.io/jupyter/datascience-notebook:2025-04-04`.
 However, including these packages can increase the image size and may introduce security risks if arbitrary code is compiled at runtime.
@@ -294,6 +300,12 @@ jupyter = [
 ]
 ```
 
+## Using Docker image via plugin
+
+The recommended way to integrate the Docker image e.g., Jupyter into your NOMAD Oasis is through the plugin entry point system. This approach is cleaner, more maintainable, and automatically handles all necessary configurations.
+
+[`nomad-north-jupyter`](https://github.com/FAIRmat-NFDI/nomad-north-jupyter) is a NOMAD plugin that provides a containerized JupyterLab environment for interactive analysis within NORTH (NOMAD Remote Tools Hub). This plugin has been added to this distribution by default via `pyproject.toml`. In `nomad.yaml`, the `NORTHTool` entry point is configured to use the [custom Jupyter image](#the-jupyter-image) built in this repository.
+
 ## Automated Unit and Example Upload Tests in CI
 
 By default, all unit tests from every plugin are executed to ensure system stability and catch potential issues early. These tests validate core functionality and help maintain consistency across different plugins.
@@ -314,9 +326,9 @@ This automated process helps ensure that your dependencies stay up to date, impr
 
 ## Customizing Documentation
 
-By default, documentation is built using the [nomad-docs](https://github.com/CRC270-HoMMage/nomad-docs) repository. However, if you'd like to customize the documentation for your Oasis instance, you can easily do so.
+By default, documentation is built using the [nomad-docs](https://github.com/FAIRmat-NFDI/nomad-docs) repository. However, if you'd like to customize the documentation for your Oasis instance, you can easily do so.
 
-1. First, [fork the nomad-docs repository](https://github.com/CRC270-HoMMage/nomad-docs/fork).
+1. First, [fork the nomad-docs repository](https://github.com/FAIRmat-NFDI/nomad-docs/fork).
 2. Make your desired changes in your fork.
 3. Update the `NOMAD_DOCS_REPO` variable in the [.github/workflows/docker-publish.yml](./.github/workflows/docker-publish.yml#L19) file to point to the URL of your forked repository.
 
