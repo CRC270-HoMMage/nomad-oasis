@@ -23,7 +23,7 @@ license = { file = "LICENSE" }
 dependencies = ["nomad-lab[infrastructure]==1.4.2"]
 
 [project.urls]
-repository = "https://github.com/FAIRmat-NFDI/nomad-distro-template"
+repository = "https://github.com/crc270-hommage/nomad-oasis"
 
 [project.optional-dependencies]
 # Add your plugins to the list below.
