@@ -20,7 +20,10 @@ dynamic = ["version"]
 readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }
-dependencies = ["nomad-lab[infrastructure]==1.4.2"]
+dependencies = [
+  "nomad-lab[infrastructure]==1.4.2", 
+  "nomad-gui==2.0.0a2.dev583",
+]
 
 [project.urls]
 repository = "https://github.com/crc270-hommage/nomad-oasis"
