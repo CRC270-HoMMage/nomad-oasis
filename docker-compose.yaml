@@ -4,6 +4,8 @@ services:
     restart: unless-stopped
     image: docker.elastic.co/elasticsearch/elasticsearch:7.17.28
     container_name: nomad_oasis_elastic
+    security_opt:
+      - no-new-privileges:true
     environment:
       - ES_JAVA_OPTS=-Xms512m -Xmx512m
       - discovery.type=single-node
@@ -26,6 +28,8 @@ services:
     restart: unless-stopped
     image: docker.io/mongo:8.0
     container_name: nomad_oasis_mongo
+    security_opt:
+      - no-new-privileges:true
     environment:
       - MONGO_DATA_DIR=/data/db
       - MONGO_LOG_DIR=/dev/null
@@ -48,8 +52,14 @@ services:
 
   postgresql:
     container_name: nomad_oasis_postgresql
+    security_opt:
+      - no-new-privileges:true
     environment:
-      POSTGRES_PASSWORD: temporal
+      # Password is interpolated from .env (POSTGRES_PASSWORD). Defaults to "temporal"
+      # so existing deployments keep working. NOTE: postgres only applies this on FIRST
+      # init of an empty data volume -- to rotate on a running deployment see
+      # SECURITY-HARDENING.md (ALTER USER, not just changing this value).
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-temporal}
       POSTGRES_USER: temporal
     image: docker.io/postgres:16
     volumes:
@@ -72,9 +82,9 @@ services:
       - DB=postgres12
       - DB_PORT=5432
       - POSTGRES_USER=temporal
-      - POSTGRES_PWD=temporal
+      - POSTGRES_PWD=${POSTGRES_PASSWORD:-temporal}
       - POSTGRES_SEEDS=postgresql
-      - SQL_PASSWORD=temporal
+      - SQL_PASSWORD=${POSTGRES_PASSWORD:-temporal}
     volumes:
       - ./scripts/_setup_temporal.sh:/scripts/_setup_temporal.sh
     entrypoint: ["/bin/sh", "/scripts/_setup_temporal.sh"]
@@ -98,6 +108,8 @@ services:
   temporal:
     image: temporalio/server:1.30
     container_name: nomad_oasis_temporal
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       postgresql:
         condition: service_healthy
@@ -107,7 +119,7 @@ services:
       - DB=postgres12
       - DB_PORT=5432
       - POSTGRES_USER=temporal
-      - POSTGRES_PWD=temporal
+      - POSTGRES_PWD=${POSTGRES_PASSWORD:-temporal}
       - POSTGRES_SEEDS=postgresql
       - TEMPORAL_ADDRESS=temporal:7233
       - TEMPORAL_CLI_ADDRESS=temporal:7233
@@ -127,6 +139,8 @@ services:
     restart: unless-stopped
     image: ghcr.io/crc270-hommage/nomad-oasis:main
     platform: linux/amd64
+    security_opt:
+      - no-new-privileges:true
     environment:
       NOMAD_SERVICE: nomad_oasis_worker
       NOMAD_ELASTIC_HOST: elastic
@@ -143,7 +157,7 @@ services:
       mongo:
         condition: service_healthy
     volumes:
-      # - ./configs/nomad.yaml:/app/nomad.yaml
+      - ./configs/nomad.yaml:/app/nomad.yaml:ro
       - ./.volumes/fs:/app/.volumes/fs
     command: python -m nomad.cli admin run action-internal-worker
     healthcheck:
@@ -238,6 +252,8 @@ services:
     image: ghcr.io/crc270-hommage/nomad-oasis:main
     platform: linux/amd64
     container_name: nomad_oasis_app
+    security_opt:
+      - no-new-privileges:true
     environment:
       NOMAD_SERVICE: nomad_oasis_app
       NOMAD_SERVICES_API_PORT: 80
@@ -259,7 +275,7 @@ services:
       north:
         condition: service_started
     volumes:
-      # - ./configs/nomad.yaml:/app/nomad.yaml
+      - ./configs/nomad.yaml:/app/nomad.yaml:ro
       - ./.volumes/fs:/app/.volumes/fs
     command: python -m nomad.cli admin run app --with-gui --gunicorn --host 0.0.0.0
     healthcheck:
@@ -280,6 +296,12 @@ services:
     image: ghcr.io/crc270-hommage/nomad-oasis:main
     platform: linux/amd64
     container_name: nomad_oasis_north
+    # NOTE: north runs as uid 0 and mounts the docker socket (required for the rootless
+    # NORTH/JupyterHub setup). The socket is the dominant risk here -- anything that can
+    # reach it can control the host's containers. no-new-privileges still helps by
+    # blocking setuid-based escalation inside the hub container itself.
+    security_opt:
+      - no-new-privileges:true
     environment:
       NOMAD_SERVICE: nomad_oasis_north
       NOMAD_NORTH_DOCKER_NETWORK: nomad_oasis_network
@@ -293,10 +315,16 @@ services:
     env_file:
       - ./.env
     volumes:
-      # - ./configs/nomad.yaml:/app/nomad.yaml
+      - ./configs/nomad.yaml:/app/nomad.yaml:ro
       - ./.volumes/fs:/app/.volumes/fs
-      - /var/run/docker.sock:/var/run/docker.sock
-    user: "1000:991"
+      # Rootless Docker: the daemon socket lives under XDG_RUNTIME_DIR, not /var/run.
+      # Hardcoded to uid 1000's runtime dir so it also works from non-login contexts
+      # (systemd/cron) where XDG_RUNTIME_DIR is unset.
+      - /run/user/1000/docker.sock:/var/run/docker.sock
+    # Rootless Docker: the bind-mounted socket maps to container root (your unprivileged
+    # host user), and there is no host "docker" group to join. Run as uid 0 so the hub can
+    # reach the socket. For ROOTFUL Docker revert this to "1000:<your-docker-gid>".
+    user: "0:0"
     command: python -m nomad.cli admin run hub
     healthcheck:
       test:
@@ -315,6 +343,8 @@ services:
   logtransfer:
     restart: unless-stopped
     image: ghcr.io/crc270-hommage/nomad-oasis:main
+    security_opt:
+      - no-new-privileges:true
     environment:
       NOMAD_SERVICE: nomad_oasis_logtransfer
       NOMAD_ELASTIC_HOST: elastic
@@ -327,7 +357,7 @@ services:
       mongo:
         condition: service_healthy
     volumes:
-      # - ./configs/nomad.yaml:/app/nomad.yaml
+      - ./configs/nomad.yaml:/app/nomad.yaml:ro
       - ./.volumes/fs:/app/.volumes/fs
     command: python -m nomad.cli admin run logtransfer
     profiles: ["with_logtransfer"]
@@ -337,16 +367,18 @@ services:
     restart: unless-stopped
     image: docker.io/nginx:1.31.1-alpine
     container_name: nomad_oasis_proxy
+    security_opt:
+      - no-new-privileges:true
     command: nginx -g 'daemon off;'
     volumes:
       # Shared config
       - ./configs/nginx_base_conf:/etc/nginx/conf.d/nginx_base_conf:ro
       # HTTP
-      - ./configs/nginx_http.conf:/etc/nginx/conf.d/default.conf:ro
+      # - ./configs/nginx_http.conf:/etc/nginx/conf.d/default.conf:ro
       # HTTPS (you need to have a TLS certificate)
-      # - ./configs/nginx_https.conf:/etc/nginx/conf.d/default.conf:ro
-      # - ./tls/selfsigned.crt:/etc/nginx/tls/mounted-nomad-oasis.crt:ro  # Path to your TLS certificate
-      # - ./tls/selfsigned.key:/etc/nginx/tls/mounted-nomad-oasis.key:ro  # Path to your TLS private key
+      - ./configs/nginx_https.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./tls/selfsigned.crt:/etc/nginx/tls/nomad-oasis.crt:ro  # Path to your TLS certificate
+      - ./tls/selfsigned.key:/etc/nginx/tls/nomad-oasis.key:ro  # Path to your TLS private key
     depends_on:
       app:
         condition: service_healthy
