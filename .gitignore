@@ -121,6 +121,12 @@ celerybeat.pid
 # SageMath parsed files
 *.sage.py
 
+# TLS certificates and private keys (never commit these)
+tls/
+*.key
+*.crt
+*.pem
+
 # Environments
 .pyenv
 .env

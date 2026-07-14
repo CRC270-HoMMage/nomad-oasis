@@ -1,7 +1,7 @@
 # Shared nginx config for both HTTP and HTTPS
 
-# Batch access-log writes instead of one synchronous write per request
-access_log /var/log/nginx/access.log main buffer=64k flush=5s;
+# Do not advertise the nginx version in responses / error pages.
+server_tokens off;
 
 gzip_min_length     1000;
 gzip_buffers        4 8k;
@@ -19,18 +19,27 @@ gzip_types
     application/x-javascript
     application/json;
 
+# Catch-all: forward to the NOMAD app. Real client IP is forwarded for logging.
 location / {
-    proxy_pass http://nomad-app-backend;
+    proxy_pass http://app:8000;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
 }
 
 location ~ /nomad-oasis\/?(gui)?$ {
-    rewrite ^ /nomad-oasis/gui/ permanent;
+    rewrite ^ /nomad-oasis/gui/v2/ permanent;
 }
 
 location /nomad-oasis/gui/ {
     proxy_intercept_errors on;
     error_page 404 = @redirect_to_index;
-    proxy_pass http://nomad-app-backend;
+    proxy_pass http://app:8000;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
 }
 
 location @redirect_to_index {
@@ -43,7 +52,11 @@ location /nomad-oasis/docs/ {
     # the assets are not loaded correctly (a broken page rendered)
     proxy_intercept_errors on;
     error_page 404 = @docs404redirect;
-    proxy_pass http://nomad-app-backend;
+    proxy_pass http://app:8000;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
 }
 
 location @docs404redirect {

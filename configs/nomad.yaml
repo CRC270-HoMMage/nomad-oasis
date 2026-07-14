@@ -1,10 +1,27 @@
 services:
-  api_host: "localhost"
+  api_host: "samarium.trr270.tu-darmstadt.de"
   api_base_path: "/nomad-oasis"
 
 oasis:
   is_oasis: true
   uses_central_user_management: true
+
+auth:
+  # Fully private Oasis. Every API request requires a valid login via the central
+  # NOMAD Keycloak, AND only the accounts listed in authorized_users are admitted --
+  # any other valid NOMAD user gets HTTP 403 (reject_unauthorized_users defaults true).
+  require_authentication: true
+  authorized_users:
+    # FAIL-SAFE FLOOR. The full group list is provided at deploy time via the env var
+    # NOMAD_AUTH_AUTHORIZED_USERS in .env (a JSON array), which OVERRIDES this list.
+    # This single entry only takes effect if that env var is unset -- so a missing
+    # .env locks the Oasis down to the maintainer rather than failing OPEN to every
+    # NOMAD account. Must be the maintainer's CENTRAL NOMAD account e-mail (the
+    # nomad-lab.eu login), which may differ from their institutional address.
+    # Recovery if locked out: fix the list / env var and
+    # `docker compose restart app worker north logtransfer`.
+    - dominik.demuth@tu-darmstadt.de
+
 
 plugins:
   entry_points:
@@ -15,8 +32,12 @@ plugins:
 
 meta:
   deployment: "oasis"
-  deployment_url: "https://my-oasis.org/api"
-  maintainer_email: "me@my-oasis.org"
+  deployment_url: "https://samarium.trr270.tu-darmstadt.de/nomad-oasis/api"
+  maintainer_email: "dominik.demuth@tu-darmstadt.de"
+  description: "NOMAD Oasis for CRC/TRR 270 HoMMage"
+  footer_links:
+    - title: "CRC/TRR 270 HoMMage"
+      url: "https://www.tu-darmstadt.de/sfb270"
 
 logstash:
   enabled: false
