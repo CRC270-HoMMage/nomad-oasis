@@ -8,6 +8,18 @@ ARG PYTHON_VERSION=3.12
 ARG UV_VERSION=0.7
 ARG JUPYTER_VERSION=2025-04-14
 
+# GPU-enabled Jupyter base for NORTH -- see GPU-NORTH-DEPLOYMENT.md Phase 2.
+# MUST be declared here: an ARG used in a FROM line has to be in the global scope, i.e.
+# before the first FROM. Declared after a FROM it belongs to that build stage and would
+# expand to empty in a later FROM.
+#
+# Pinned by DIGEST, not tag. `cuda12-latest` is a moving target and titan's driver
+# (535.309.01) caps CUDA at 12.4, so the day upstream ships a CUDA 13 variant a tag would
+# silently break every GPU session. This digest is
+# quay.io/jupyter/pytorch-notebook:cuda12-2025-04-14 -- deliberately the same date as
+# JUPYTER_VERSION above so the CPU and GPU images share a Jupyter base. Bump both together.
+ARG JUPYTER_GPU_IMAGE=quay.io/jupyter/pytorch-notebook@sha256:f367f2e89305939f3f37e8cc1271c0b3c60863a26861138fe5438acc3aafaa3d
+
 FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv_image
 
 FROM python:${PYTHON_VERSION}-slim AS base
@@ -250,6 +262,100 @@ WORKDIR "${HOME}"
 COPY --from=uv_image /uv /bin/uv
 COPY --from=jupyter_builder /opt/conda /opt/conda
 
+
+# Get rid ot the following message when you open a terminal in jupyterlab:
+# groups: cannot find name for group ID 11320
+RUN touch ${HOME}/.hushlogin
+
+
+# ==============================================================================
+# GPU-enabled Jupyter for NORTH -- mirrors the jupyter_builder/jupyter pair above
+# on a CUDA base. See GPU-NORTH-DEPLOYMENT.md Phase 2.
+#
+# A GPU in the container is useless without CUDA userspace libs, so the BASE IMAGE
+# -- not a flag -- is what makes this work. The `use_gpu: true` flag in nomad.yaml
+# (Phase 6) only attaches the device; it installs nothing.
+#
+# Layering the NOMAD plugin env onto a torch base is safe ONLY because uv.lock
+# contains no torch and no nvidia-* packages, and `uv sync --inexact` preserves
+# pre-installed packages -- so the base image's CUDA torch survives untouched.
+# IF A PLUGIN EVER ADDS A TORCH DEPENDENCY, RE-VERIFY: uv would then resolve torch
+# from PyPI and could silently replace the CUDA build with a different one.
+#
+# Build target: jupyter_gpu -> publish as
+# ghcr.io/crc270-hommage/nomad-oasis/jupyter-gpu:main
+# Build it LOCALLY ON TITAN first (multi-GB); promote to CI only once it works.
+# ==============================================================================
+FROM ${JUPYTER_GPU_IMAGE} AS jupyter_gpu_builder
+
+ENV UV_PROJECT_ENVIRONMENT=/opt/conda \
+    UV_FROZEN=1
+
+# Fix: https://github.com/hadolint/hadolint/wiki/DL4006
+# Fix: https://github.com/koalaman/shellcheck/wiki/SC3014
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+USER root
+
+RUN apt-get update \
+ && apt-get install --yes --quiet --no-install-recommends \
+      libgomp1 \
+      libmagic1 \
+      file \
+      gcc \
+      build-essential \
+      curl \
+      zip \
+      unzip \
+      git \
+      # clean cache and logs
+      && rm -rf /var/lib/apt/lists/* /var/log/* /var/tmp/* ~/.npm
+
+# Switch back to jovyan to avoid accidental container runs as root
+USER ${NB_UID}
+WORKDIR "${HOME}"
+
+COPY --from=uv_image /uv /bin/uv
+
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    # Use inexact to avoid removing pre-installed packages in the environment
+    # -- this is what protects the base image's CUDA torch, see the note above
+    # Use no-install-project to skip installing the current project (`nomad-distribution`)
+    uv sync --extra plugins --extra jupyter --no-install-project --inexact
+
+
+FROM ${JUPYTER_GPU_IMAGE} AS jupyter_gpu
+# Fix: https://github.com/hadolint/hadolint/wiki/DL4006
+# Fix: https://github.com/koalaman/shellcheck/wiki/SC3014
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+USER root
+
+RUN apt-get update \
+ && apt-get install --yes --quiet --no-install-recommends \
+      libgomp1 \
+      libmagic1 \
+      file \
+      curl \
+      zip \
+      unzip \
+      git \
+      # `nbconvert` dependencies
+      # https://nbconvert.readthedocs.io/en/latest/install.html#installing-tex
+      texlive-xetex \
+      texlive-fonts-recommended \
+      texlive-plain-generic \
+      # clean cache and logs
+      && rm -rf /var/lib/apt/lists/* /var/log/* /var/tmp/* ~/.npm
+
+# Switch back to jovyan to avoid accidental container runs as root
+USER ${NB_UID}
+WORKDIR "${HOME}"
+
+COPY --from=uv_image /uv /bin/uv
+COPY --from=jupyter_gpu_builder /opt/conda /opt/conda
 
 # Get rid ot the following message when you open a terminal in jupyterlab:
 # groups: cannot find name for group ID 11320
