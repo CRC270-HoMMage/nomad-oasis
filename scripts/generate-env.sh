@@ -31,7 +31,6 @@ NOMAD_SERVICES_API_SECRET='$(openssl rand -hex 32)'
 
 # API token for nomad services to communicate with the hub, can be generated with: openssl rand -hex 32
 NOMAD_NORTH_HUB_SERVICE_API_TOKEN='$HUB_SERVICE_API_TOKEN'
-NOMAD_SERVICES_API_SECRET='$API_SECRET'
 POSTGRES_PASSWORD='$POSTGRES_PASSWORD'
 # Private-Oasis allowlist. JSON array of CENTRAL NOMAD account e-mails (nomad-lab.eu
 # logins) permitted to access this deployment. Overrides auth.authorized_users in
