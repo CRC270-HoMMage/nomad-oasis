@@ -2572,7 +2572,7 @@ dependencies = [
 [[package]]
 name = "nomad-mpms"
 version = "0.1.0"
-source = { git = "https://github.com/CRC270-HoMMage/nomad-mpms.git?subdirectory=nomad-mpms#f4671d3f27395ff4d376fd95a49677ddfc453caf" }
+source = { git = "https://github.com/CRC270-HoMMage/nomad-mpms.git?subdirectory=nomad-mpms#4e45912a79a82d3da0ca0c7c243d148cd7700e0f" }
 dependencies = [
     { name = "nomad-lab" },
     { name = "plotly" },
