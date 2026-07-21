@@ -31,7 +31,10 @@ repository = "https://github.com/crc270-hommage/nomad-oasis"
 [project.optional-dependencies]
 # Add your plugins to the list below.
 plugins = [
- "nomad-north-jupyter>=0.2.5"
+ "nomad-north-jupyter>=0.2.5",
+ "nomad-measurements @ git+https://github.com/CRC270-HoMMage/nomad-measurements.git",
+ "nomad-mpms @ git+https://github.com/CRC270-HoMMage/nomad-mpms.git#subdirectory=nomad-mpms",
+ "nomad-sfb270-eln @ git+https://github.com/CRC270-HoMMage/nomad-plugin-crc270eln.git"
 ]
 jupyter = ["jupyter-events"]
 gpu-action = []
