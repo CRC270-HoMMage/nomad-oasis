@@ -32,6 +32,22 @@ repository = "https://github.com/crc270-hommage/nomad-oasis"
 # Add your plugins to the list below.
 plugins = [
   "nomad-north-jupyter>=0.2.6",
+  # CRC270-HoMMage fork of nomad-measurements (XRD, Quantum Design PPMS/MPMS,
+  # transmission, mapping schemas + parsers). Public repo, root/src layout.
+  # This direct git URL also satisfies nomad-sfb270-eln's `nomad-measurements`
+  # dependency with the fork (a URL ref outranks the PyPI package). Pinned to a
+  # commit for reproducible builds; bump the SHA (or use @main) to track changes.
+  "nomad-measurements @ git+https://github.com/CRC270-HoMMage/nomad-measurements.git@b57bdd183445e7f7fb63729bf4c68070b136c11d",
+  # CRC270-HoMMage nomad-mpms. Plugin lives in the nomad-mpms/ subdirectory of
+  # the repo, hence #subdirectory=. NOTE: ships a cpu-task-queue Action (the
+  # template's demo "greeting"); no cpu_worker is wired up, so that action has no
+  # worker and tests/test_actions.py fails advisory-only. Schemas, parsers, app,
+  # and normalizer work regardless.
+  "nomad-mpms @ git+https://github.com/CRC270-HoMMage/nomad-mpms.git@4e45912a79a82d3da0ca0c7c243d148cd7700e0f#subdirectory=nomad-mpms",
+  # CRC270-HoMMage ELN schema. NOTE: distribution name is `nomad-sfb270-eln`
+  # (package nomad_sfb270_eln) even though the repo is `nomad-plugin-crc270eln`.
+  # Depends on nomad-measurements (satisfied by the fork pinned above).
+  "nomad-sfb270-eln @ git+https://github.com/CRC270-HoMMage/nomad-plugin-crc270eln.git@6afa9de050f2f9c79487586c8848b2c21d6649d6",
 ]
 jupyter = ["jupyter-events"]
 gpu-action = []
