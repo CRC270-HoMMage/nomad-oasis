@@ -58,6 +58,18 @@ RUN apt-get update \
        curl \
        zip \
        unzip \
+       # JupyterHub's proxy, required by NORTH (`nomad.cli admin run hub`).
+       # RESTORED 2026-08-04: upstream dropped nodejs/npm + configurable-http-proxy from this
+       # block (c6ac447 "Update to the new distro mechanism", 288c1e5 "cleanup") while
+       # docker-compose.yaml still runs `admin run hub`, which needs the binary. Without it the
+       # hub dies at startup with:
+       #   Failed to find proxy ['configurable-http-proxy'] / FileNotFoundError
+       # It is not in uv.lock either, so there is no Python route to it. The leftover `~/.npm`
+       # in the cleanup line below is the fingerprint of the removal.
+       # ⚠️ Re-check this on the next template merge -- upstream may fix it differently.
+       nodejs \
+       npm \
+       && npm install -g configurable-http-proxy@^4.2.0 \
        # clean cache and logs
        && rm -rf /var/lib/apt/lists/* /var/log/* /var/tmp/* ~/.npm
 
