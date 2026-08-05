@@ -19,13 +19,18 @@ gzip_types
     application/x-javascript
     application/json;
 
-# Catch-all: forward to the NOMAD app. Real client IP is forwarded for logging.
+# Every app location proxies to the nomad-app-backend upstream (defined in nginx_http.conf /
+# nginx_https.conf), so the app's address lives in exactly one place per entrypoint and every
+# route gets the same keep-alive pool.
+#
+# ⚠️ Do NOT add proxy_set_header here. nginx REPLACES the inherited set rather than merging:
+# a single proxy_set_header in a location discards every one from the server level -- including
+# Host and the Connection "" that keep-alive requires. Host, X-Real-IP, X-Forwarded-For and
+# X-Forwarded-Proto are set once at server level; adding one line here silently drops all four.
+
+# Catch-all: forward to the NOMAD app.
 location / {
-    proxy_pass http://app:8000;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_pass http://nomad-app-backend;
 }
 
 location ~ /nomad-oasis\/?(gui)?$ {
@@ -35,11 +40,7 @@ location ~ /nomad-oasis\/?(gui)?$ {
 location /nomad-oasis/gui/ {
     proxy_intercept_errors on;
     error_page 404 = @redirect_to_index;
-    proxy_pass http://app:8000;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_pass http://nomad-app-backend;
 }
 
 location @redirect_to_index {
@@ -52,11 +53,7 @@ location /nomad-oasis/docs/ {
     # the assets are not loaded correctly (a broken page rendered)
     proxy_intercept_errors on;
     error_page 404 = @docs404redirect;
-    proxy_pass http://app:8000;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_pass http://nomad-app-backend;
 }
 
 location @docs404redirect {
