@@ -47,13 +47,43 @@ fi
 # Create the .env file and check for errors
 if ! cat >"$ENV_FILE.north" <<EOF; then
 # OAuth2 settings for authentication with Keycloak
-KEYCLOAK_URL="https://nomad-lab.eu/fairdi/keycloak"
+#
+# NOTE the /auth suffix. Upstream's template writes ".../fairdi/keycloak", which is NOT a
+# Keycloak: nomad-lab.eu's front proxy 302s that path to https://nomad-lab.eu/nomad-lab/.
+# (It answers identically for a deliberately bogus redirect_uri -- that is how this was
+# caught.) The app's own default, nomad.config.keycloak.server_url, is
+# ".../fairdi/keycloak/auth", and only that serves the OIDC discovery document.
+#
+# The hub builds authorize_url as KEYCLOAK_URL + realms/<realm>/protocol/openid-connect/auth,
+# so with the short form the browser is bounced to the NOMAD homepage, hub login never
+# completes, no auth_state is ever stored, and c.Authenticator.refresh_pre_spawn = True
+# rejects EVERY tool launch with:
+#     403 ... auth has expired for <user>, login again
+# The app is unaffected (it has the right default), so the Oasis logs in fine while NORTH is
+# dead -- which is what made this look like a JupyterHub bug rather than a URL typo.
+#
+# Verified 2026-08-05 against a pristine nomad-distro-template: with the short form a spawn
+# 403s, with /auth the notebook starts. Re-check on the next template merge.
+#
+# Keep this comment free of backticks and dollar-parens -- the heredoc is unquoted, so the
+# shell would execute them instead of writing them out.
+KEYCLOAK_URL="https://nomad-lab.eu/fairdi/keycloak/auth"
 KEYCLOAK_REALM="fairdi_nomad_prod"
 OAUTH_CLIENT_ID="nomad_public"
 OAUTH_CLIENT_SECRET=""
 
 # API key for nomad services to communicate with the hub, can be generated with: openssl rand -hex 32
 SERVICE_API_TOKEN='$HUB_SERVICE_API_TOKEN'
+
+# SAME VALUE, DIFFERENT NAME -- and both are required. jupyterhub_config.py registers the
+# privileged 'nomad-service' identity from config.north.hub_service_api_token, which NOMAD
+# reads from NOMAD_NORTH_HUB_SERVICE_API_TOKEN, not from SERVICE_API_TOKEN above. That field
+# has a default, so omitting this errors nowhere: the hub quietly registers the well-known
+# default 'secret-token'. On samarium that left the hub API answerable from the public
+# internet with a guessable token -- and nomad-service is the identity pre_spawn trusts to
+# launch containers with caller-supplied host mounts, on a host that hands the hub the docker
+# socket. After deploying, verify a request with 'Authorization: token secret-token' gets 403.
+NOMAD_NORTH_HUB_SERVICE_API_TOKEN='$HUB_SERVICE_API_TOKEN'
 
 # Key for encryption of user_settings, can be generated with: openssl rand -hex 32
 JUPYTERHUB_CRYPT_KEY='$(openssl rand -hex 32)'
