@@ -287,6 +287,25 @@ services:
       NOMAD_TEMPORAL_HOST: temporal
     env_file:
       - ./.env
+    # GPU-NORTH Phase 3: publish the app API to the WireGuard peer, so a hub running on the
+    # GPU host can reach it at http://10.10.0.1:8000/nomad-oasis/api/v1. Bound to a single IP
+    # -- NEVER 0.0.0.0, which would expose an unauthenticated-by-default API to the campus.
+    #
+    # Defaults to loopback so any host without wg0 still starts normally; samarium sets
+    # NOMAD_APP_WG_BIND=10.10.0.1 in .env. Keeping the publish here (rather than as a local
+    # edit on the server) is deliberate -- it was lost once already, on 2026-08-05, when
+    # samarium's uncommitted docker-compose.yaml edits were discarded before a pull.
+    #
+    # ⚠️ Publishing a port and permitting a port are separate acts. samarium runs
+    # `default deny (incoming)`, so this also needs:
+    #     sudo ufw allow in on wg0 from 10.10.0.2 to any port 8000 proto tcp
+    # `ss -tlnp` confirms only the bind, not reachability, so a missing rule looks like a
+    # broken tunnel. Verify from the GPU host with a real request to /nomad-oasis/alive.
+    #
+    # ⚠️ If wg0 is down when Docker starts this container the bind fails with "cannot assign
+    # requested address". `restart: unless-stopped` retries until the tunnel is up.
+    ports:
+      - "${NOMAD_APP_WG_BIND:-127.0.0.1}:8000:8000"
     depends_on:
       temporal:
         condition: service_healthy
