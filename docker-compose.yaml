@@ -311,9 +311,25 @@ services:
       start_period: 10s
 
   # nomad remote tools hub (JupyterHUB)
+  #
+  # This is FAIRmat's image, not ours, and that is correct: the hub carries NO distribution
+  # content. It is JupyterHub + DockerSpawner + a config that resolves everything from OUR app
+  # at spawn time (/north/tools/ for the tool list, /north/mounts/<tool> for image and mounts).
+  # That is why a generic hub spawns ghcr.io/crc270-hommage/nomad-oasis/jupyter:main. We build
+  # no hub image and publish none -- see the Dockerfile stages and docker-publish.yml.
+  #
+  # ⚠️ PAIRED WITH configs/nomad.yaml's `north.enable_new_hub_api: true`. The flag selects
+  # which router the APP exposes, and the two route sets are disjoint:
+  #   false -> /north/, /north/{name}
+  #   true  -> /north/tools, /north/tools/{name}, /north/mounts/{name}, /north/servers
+  # This image calls /north/mounts/<tool> unconditionally, so with the flag false it gets a
+  # 404, does not check the status, and dies iterating the error body with
+  # "TypeError: string indices must be integers". Never change one without the other.
+  # To check a running deployment from the outside, without attempting a launch:
+  #   curl -s <host>/nomad-oasis/api/v1/openapi.json | grep north/mounts
   north:
     restart: unless-stopped
-    image: ghcr.io/crc270-hommage/nomad-oasis:main
+    image: ghcr.io/fairmat-nfdi/nomad-north:main
     platform: linux/amd64
     container_name: nomad_oasis_north
     # NOTE: north runs as uid 0 and mounts the docker socket (required for the rootless
@@ -326,11 +342,15 @@ services:
       NOMAD_API_URL: "http://app:8000/nomad-oasis/api/v1"
       DOCKER_PREFIX: "nomad-oasis-north"
       DOCKER_NETWORK: "nomad_oasis_network"
+    # Also carries OAUTH_CALLBACK_URL, KEYCLOAK_URL and SERVICE_API_TOKEN -- all three have
+    # defaults in the image that are wrong for a real deployment. See scripts/generate-env.sh.
     env_file:
       - ./.env.north
     volumes:
-      - ./configs/nomad.yaml:/app/nomad.yaml:ro
-      - ./.volumes/fs:/app/.volumes/fs
+      # JupyterHub's database and cookie secrets. WITHOUT this, the hub writes them into the
+      # container's writable layer and every recreate wipes user records and auth_state --
+      # which presents as "403 auth has expired for <user>, login again" on the next launch.
+      - nomad_north:/data
       # Rootless Docker: the daemon socket lives under XDG_RUNTIME_DIR, not /var/run.
       # Hardcoded to uid 1000's runtime dir so it also works from non-login contexts
       # (systemd/cron) where XDG_RUNTIME_DIR is unset.
@@ -339,7 +359,9 @@ services:
     # host user), and there is no host "docker" group to join. Run as uid 0 so the hub can
     # reach the socket. For ROOTFUL Docker revert this to "1000:<your-docker-gid>".
     user: "0:0"
-    command: python -m nomad.cli admin run hub
+    # No `command:` and no nomad.yaml / .volumes/fs mounts -- unlike the app image, this one's
+    # entrypoint IS the hub, it never reads nomad.yaml, and it needs no view of the upload
+    # tree: the spawner hands HOST paths to the docker daemon.
     healthcheck:
       test:
         - "CMD"
