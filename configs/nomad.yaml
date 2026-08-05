@@ -54,4 +54,27 @@ elastic:
 
 north:
   enabled: true
-  enable_new_hub_api: true
+  # FALSE because docker-compose.yaml's `north` runs the APP image with
+  # `command: python -m nomad.cli admin run hub`. This flag and the hub image are a PAIR:
+  #
+  #   app image + `admin run hub`            -> enable_new_hub_api: false   <- what we ship
+  #   ghcr.io/fairmat-nfdi/nomad-north:main  -> enable_new_hub_api: true    <- upstream default
+  #
+  # With true, the app uses app/v1/routers/north_new.py, whose start handler POSTs to
+  # /hub/api/users/<user>/servers/<tool> with NO BODY. That is correct only for the dedicated
+  # hub image, which resolves the tool itself by calling back into the NOMAD API
+  # (/north/tools/<name>, /north/mounts/<name>) using the user's access token that
+  # auth_state_hook copies into spawner.user_options. The app image's hub has no such
+  # callback: its pre_spawn drives image, cmd, volume mounts and the GPU DeviceRequest
+  # entirely from user_options['tool'], so a bodyless POST silently falls back to
+  # DockerSpawner's stock jupyter/datascience-notebook, mounts nothing, requests no GPU.
+  # The old router (north.py) builds that body explicitly, which is why false works here.
+  #
+  # [corrected 2026-08-05] An earlier version of this comment said the new hub API is simply
+  # broken in nomad-lab 1.4.3. It is not -- it works with the dedicated image, verified end to
+  # end on a pristine template. Only the MIXED pairs break. If north ever moves to the
+  # dedicated image (samarium already has), flip this to true at the same time.
+  #
+  # NB: neither setting was the cause of the long-running "tool never starts" failure -- that
+  # was KEYCLOAK_URL in .env.north missing its /auth suffix. See scripts/generate-env.sh.
+  enable_new_hub_api: false
