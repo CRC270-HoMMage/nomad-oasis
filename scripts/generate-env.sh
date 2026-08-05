@@ -44,6 +44,17 @@ EOF
   exit 1
 fi
 
+# Derive the hub's public OAuth callback URL from services.api_host in configs/nomad.yaml,
+# so it cannot drift from the app's notion of the public host. Falls back to localhost, which
+# is also the nomad-north image's own default. Scheme: http for localhost, https otherwise
+# (a real domain is served over TLS by the proxy -- see configs/nginx_https.conf).
+API_HOST=$(sed -n 's/^[[:space:]]*api_host:[[:space:]]*"\?\([^"[:space:]]*\)"\?.*/\1/p' \
+  "$PARENT_DIR/configs/nomad.yaml" 2>/dev/null | head -1)
+API_HOST=${API_HOST:-localhost}
+if [ "$API_HOST" = "localhost" ]; then SCHEME=http; else SCHEME=https; fi
+OAUTH_CALLBACK_URL="$SCHEME://$API_HOST/nomad-oasis/north/hub/oauth_callback"
+echo "  hub OAuth callback -> $OAUTH_CALLBACK_URL"
+
 # Create the .env file and check for errors
 if ! cat >"$ENV_FILE.north" <<EOF; then
 # OAuth2 settings for authentication with Keycloak
@@ -71,6 +82,17 @@ KEYCLOAK_URL="https://nomad-lab.eu/fairdi/keycloak/auth"
 KEYCLOAK_REALM="fairdi_nomad_prod"
 OAUTH_CLIENT_ID="nomad_public"
 OAUTH_CLIENT_SECRET=""
+
+# Public callback URL for the HUB's own Keycloak login (distinct from the app's login).
+# The nomad-north image defaults this to http://localhost/nomad-oasis/north/hub/oauth_callback,
+# so it is correct ONLY for a localhost Oasis. On a real domain, leaving it unset sends users
+# to localhost when they launch a tool and the login can never complete -- with no error
+# anywhere, because the hub is doing exactly what it was configured to do.
+#
+# Derived below from services.api_host in configs/nomad.yaml so the two cannot drift. For a
+# two-host NORTH (hub on a separate GPU box) this is still the PUBLIC domain that fronts the
+# hub via nginx -- never the hub host's own address, which never appears in a URL bar.
+OAUTH_CALLBACK_URL="$OAUTH_CALLBACK_URL"
 
 # API key for nomad services to communicate with the hub, can be generated with: openssl rand -hex 32
 SERVICE_API_TOKEN='$HUB_SERVICE_API_TOKEN'
