@@ -58,8 +58,9 @@ services:
     environment:
       # Password is interpolated from .env (POSTGRES_PASSWORD). Defaults to "temporal"
       # so existing deployments keep working. NOTE: postgres only applies this on FIRST
-      # init of an empty data volume -- to rotate on a running deployment see
-      # SECURITY-HARDENING.md (ALTER USER, not just changing this value).
+      # init of an empty data volume. Rotating on a RUNNING deployment also needs an
+      # `ALTER USER temporal WITH PASSWORD ...` inside the DB -- changing this value
+      # alone just breaks temporal's login. Full recipe in scripts/generate-env.sh.
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-temporal}
       POSTGRES_USER: temporal
     image: docker.io/postgres:16

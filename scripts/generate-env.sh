@@ -21,8 +21,13 @@ fi
 HUB_SERVICE_API_TOKEN=$(openssl rand -hex 32)
 
 # Generate a random password for the temporal/postgres database. On a fresh deployment
-# (empty postgres volume) this becomes the DB password. To rotate it on an ALREADY
-# running deployment, changing this value is NOT enough -- see SECURITY-HARDENING.md.
+# (empty postgres volume) this becomes the DB password. To rotate it on an ALREADY running
+# deployment, changing this value is NOT enough: postgres reads POSTGRES_PASSWORD only when
+# initializing an EMPTY volume, so editing .env alone just breaks temporal's DB login. Also:
+#   docker compose exec postgresql psql -U temporal \
+#     -c "ALTER USER temporal WITH PASSWORD '<NEW>';"
+#   docker compose up -d --force-recreate postgresql temporal worker
+# Low priority -- postgres/temporal are internal-only and unreachable from the network.
 POSTGRES_PASSWORD=$(openssl rand -hex 24)
 
 # Create the .env file and check for errors

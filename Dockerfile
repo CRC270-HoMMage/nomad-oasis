@@ -8,7 +8,8 @@ ARG PYTHON_VERSION=3.12
 ARG UV_VERSION=0.7
 ARG JUPYTER_VERSION=2025-04-14
 
-# GPU-enabled Jupyter base for NORTH -- see GPU-NORTH-DEPLOYMENT.md Phase 2.
+# GPU-enabled Jupyter base for NORTH -- see the GPU-NORTH deployment runbook, Phase 2. That
+# document is kept OUT of this public repo (it describes live host topology); ask the maintainer.
 # MUST be declared here: an ARG used in a FROM line has to be in the global scope, i.e.
 # before the first FROM. Declared after a FROM it belongs to that build stage and would
 # expand to empty in a later FROM.
@@ -270,7 +271,7 @@ RUN touch ${HOME}/.hushlogin
 
 # ==============================================================================
 # GPU-enabled Jupyter for NORTH -- mirrors the jupyter_builder/jupyter pair above
-# on a CUDA base. See GPU-NORTH-DEPLOYMENT.md Phase 2.
+# on a CUDA base. See the GPU-NORTH deployment runbook, Phase 2 (not in this public repo).
 #
 # A GPU in the container is useless without CUDA userspace libs, so the BASE IMAGE
 # -- not a flag -- is what makes this work. The `use_gpu: true` flag in nomad.yaml
