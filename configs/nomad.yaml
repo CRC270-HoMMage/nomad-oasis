@@ -80,3 +80,32 @@ north:
   # NB: neither setting ever caused the long-running "tool never starts" failure -- that was
   # KEYCLOAK_URL in .env.north missing its /auth suffix. See scripts/generate-env.sh.
   enable_new_hub_api: true
+
+# ⚠️ ENABLE TOGETHER WITH PHASE 5, NEVER BEFORE. See the GPU-NORTH deployment runbook, §1f and
+# Phase 5 -- kept out of this public repo, since it describes live host topology.
+#
+# fs.*_external are the paths seen by the docker daemon that SPAWNS sessions, on ITS OWN
+# host. The plain fs.staging / fs.public / fs.north_home stay as they are -- those are the
+# paths inside the container and are unaffected by where the hub runs.
+#
+# TODAY the spawning daemon is samarium's own, so the derived defaults are correct and this
+# block MUST stay commented out. NOMAD_FS_EXTERNAL_WORKING_DIRECTORY ("$PWD" =
+# /var/nomad-oasis, see docker-compose.yaml) yields /var/nomad-oasis/.volumes/fs/... which
+# exists here. Uncommenting now points the LOCAL hub at /srv/nomad-north/..., which does not
+# exist on samarium -- docker then creates it as an empty directory and every session comes
+# up showing ZERO uploads, with no error anywhere. It fails exactly like a broken mount.
+#
+# AFTER Phase 5 the spawning daemon is titan's (.102), and titan mounts samarium's exported
+# /var/nomad-oasis/.volumes/fs at /srv/nomad-north/fs -- the bindfs view, from /etc/fstab
+# (Phase 1e). Same bytes, different path. The app hands the daemon a STRING, so unless it is
+# translated here every bind mount lands on an empty directory instead of the upload tree.
+#
+# Consumers, verified in nomad-lab: nomad/north/__init__.py:90,106 (the session mounts) and
+# app/v1/routers/uploads.py:3309 (the informational upload_files_server_path field). Nothing
+# reads or writes data through them. fs.actions_external is deliberately left deriving from
+# $PWD -- Actions workers keep running on samarium.
+#
+# fs:
+#   staging_external:    /srv/nomad-north/fs/staging
+#   public_external:     /srv/nomad-north/fs/public
+#   north_home_external: /srv/nomad-north/fs/north/users
