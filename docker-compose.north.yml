@@ -14,10 +14,12 @@
 #   /srv/nomad-north/fs mounted (runbook Phase 1e) — sessions bind-mount paths beneath it
 #
 # ⚠️ ALSO REQUIRED, on SAMARIUM: the app must publish its API on the WireGuard address, i.e.
-# NOMAD_APP_WG_BIND=10.10.0.1 in samarium's .env plus a redeploy. Committed as 88ebfed but NOT
-# deployed as of 2026-08-06 — verified from titan, tcp/8000 is refused. Without it the hub comes
-# up perfectly healthy and then cannot resolve a single tool, because /north/tools/ is
-# unreachable. Check before deploying:  curl -m5 http://10.10.0.1:8000/nomad-oasis/alive
+# NOMAD_APP_WG_BIND=10.10.0.1 in samarium's .env. Deployed and verified 2026-08-06. Without it
+# the hub comes up perfectly HEALTHY and then cannot resolve a single tool -- profile_list is a
+# lazy cached_property, so nothing complains until a user clicks Launch. Check before deploying:
+#   curl -m5 http://10.10.0.1:8000/nomad-oasis/alive        # expect 200
+# A refused connection means the app is not bound there; a timeout means ufw. They are different
+# faults and the distinction is the whole diagnosis.
 #
 # Addresses, uid and the docker GID are parameterised so this file is safe in a public repo and
 # starts on a host without wg0. Set them in .env next to this file:
@@ -140,20 +142,21 @@ services:
   # image onto the daemon that SPAWNS tools. Worth more here than it was there: the GPU image
   # is 15.1 GB on disk / 4.62 GB to transfer.
   #
-  # ⚠️ Commented out until the GPU image is published to GHCR — `pull_policy: always` fails
-  # against an image that is not there, and it currently exists only as a local build on titan.
-  # ⚠️ When enabled, this ref MUST MATCH the tool image in configs/nomad.yaml exactly. Drift
-  # means this pre-pulls one image while NOMAD spawns another; the symptom is a slow first
-  # launch and nothing else, so it will not announce itself.
+  # ⚠️ This ref MUST MATCH the tool image in configs/nomad.yaml exactly. Drift means this
+  # pre-pulls one image while NOMAD spawns another; the symptom is a slow first launch and
+  # nothing else, so it will not announce itself.
   #
-  # jupyterlab_image:
-  #   image: ghcr.io/crc270-hommage/nomad-oasis/jupyter-gpu:main
-  #   platform: linux/amd64
-  #   container_name: nomad_jupyter_image
-  #   pull_policy: always
-  #   entrypoint: ["true"]
-  #   deploy:
-  #     replicas: 0
+  # This is also the UPDATE mechanism, not just a warm-up: dockerspawner defaults pull_policy
+  # to `ifnotpresent`, so a freshly pushed :main is never picked up on its own. `docker compose
+  # -f docker-compose.north.yml pull` is what moves this host to a new image.
+  jupyterlab_image:
+    image: ghcr.io/crc270-hommage/nomad-oasis/jupyter-gpu:main
+    platform: linux/amd64
+    container_name: nomad_jupyter_image
+    pull_policy: always
+    entrypoint: ["true"]
+    deploy:
+      replicas: 0
 
 networks:
   default:

@@ -28,16 +28,19 @@ plugins:
     options:
       nomad_north_jupyter.north_tools:jupyter:
         north_tool:
-          # The CUDA image, from the Dockerfile's `jupyter_gpu` stage. A bare local tag is correct
-          # here rather than a shortcut: NORTH sessions are spawned by the GPU host's docker
-          # daemon, the image exists there, and dockerspawner defaults pull_policy to
-          # `ifnotpresent` (verified, dockerspawner 14.0.0), so nothing is ever fetched.
+          # The CUDA image, built from the Dockerfile's `jupyter_gpu` stage by the `build-gpu`
+          # job in docker-publish.yml.
           #
-          # ⚠️ When this image reaches GHCR, change this ref AND the `jupyterlab_image` pre-pull
-          # ref in docker-compose.north.yml together. If they drift, the pre-pull warms one image
-          # while NOMAD spawns another; the only symptom is a slow first launch, so it will not
-          # announce itself.
-          image: nomad-oasis/jupyter-gpu:local
+          # ⚠️ PAIRED with the `jupyterlab_image` pre-pull ref in docker-compose.north.yml. They
+          # must name the SAME image. If they drift, the pre-pull warms one image while NOMAD
+          # spawns another; the only symptom is a slow first launch, so it will not announce
+          # itself.
+          #
+          # NOTE on updates: dockerspawner defaults pull_policy to `ifnotpresent`, so a freshly
+          # pushed :main is NOT picked up on its own -- the GPU host keeps using the copy it
+          # already has. Updating is deliberate: `docker compose -f docker-compose.north.yml pull`
+          # there, which is precisely what the pre-pull service exists for.
+          image: ghcr.io/crc270-hommage/nomad-oasis/jupyter-gpu:main
           #
           # ⚠️ CURRENTLY INERT, and set deliberately anyway. The hub image in use
           # (ghcr.io/fairmat-nfdi/nomad-north) does not read use_gpu -- GPUs are attached by
