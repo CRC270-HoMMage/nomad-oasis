@@ -284,7 +284,9 @@ services:
       NOMAD_ELASTIC_HOST: elastic
       NOMAD_MONGO_HOST: mongo
       NOMAD_LOGSTASH_HOST: logtransfer
-      NOMAD_NORTH_HUB_HOST: north
+      # NORTH runs on the GPU host (.102) and is reached over WireGuard. This is where the
+      # app builds its app->hub URL from: http://{hub_host}:{hub_port}{api_base_path}/north/hub.
+      NOMAD_NORTH_HUB_HOST: 10.10.0.2
       NOMAD_TEMPORAL_HOST: temporal
     env_file:
       - ./.env
@@ -329,73 +331,6 @@ services:
       timeout: 10s
       retries: 30
       start_period: 10s
-
-  # nomad remote tools hub (JupyterHUB)
-  #
-  # This is FAIRmat's image, not ours, and that is correct: the hub carries NO distribution
-  # content. It is JupyterHub + DockerSpawner + a config that resolves everything from OUR app
-  # at spawn time (/north/tools/ for the tool list, /north/mounts/<tool> for image and mounts).
-  # That is why a generic hub spawns ghcr.io/crc270-hommage/nomad-oasis/jupyter:main. We build
-  # no hub image and publish none -- see the Dockerfile stages and docker-publish.yml.
-  #
-  # ⚠️ PAIRED WITH configs/nomad.yaml's `north.enable_new_hub_api: true`. The flag selects
-  # which router the APP exposes, and the two route sets are disjoint:
-  #   false -> /north/, /north/{name}
-  #   true  -> /north/tools, /north/tools/{name}, /north/mounts/{name}, /north/servers
-  # This image calls /north/mounts/<tool> unconditionally, so with the flag false it gets a
-  # 404, does not check the status, and dies iterating the error body with
-  # "TypeError: string indices must be integers". Never change one without the other.
-  # To check a running deployment from the outside, without attempting a launch:
-  #   curl -s <host>/nomad-oasis/api/v1/openapi.json | grep north/mounts
-  north:
-    restart: unless-stopped
-    image: ghcr.io/fairmat-nfdi/nomad-north:main
-    platform: linux/amd64
-    container_name: nomad_oasis_north
-    # NOTE: north runs as uid 0 and mounts the docker socket (required for the rootless
-    # NORTH/JupyterHub setup). The socket is the dominant risk here -- anything that can
-    # reach it can control the host's containers. no-new-privileges still helps by
-    # blocking setuid-based escalation inside the hub container itself.
-    security_opt:
-      - no-new-privileges:true
-    environment:
-      NOMAD_API_URL: "http://app:8000/nomad-oasis/api/v1"
-      DOCKER_PREFIX: "nomad-oasis-north"
-      DOCKER_NETWORK: "nomad_oasis_network"
-    # Also carries OAUTH_CALLBACK_URL, KEYCLOAK_URL and SERVICE_API_TOKEN -- all three have
-    # defaults in the image that are wrong for a real deployment. See scripts/generate-env.sh.
-    env_file:
-      - ./.env.north
-    volumes:
-      # JupyterHub's database and cookie secrets. WITHOUT this, the hub writes them into the
-      # container's writable layer and every recreate wipes user records and auth_state --
-      # which presents as "403 auth has expired for <user>, login again" on the next launch.
-      - nomad_north:/data
-      # Rootless Docker: the daemon socket lives under XDG_RUNTIME_DIR, not /var/run.
-      # Hardcoded to uid 1000's runtime dir so it also works from non-login contexts
-      # (systemd/cron) where XDG_RUNTIME_DIR is unset.
-      - /run/user/1000/docker.sock:/var/run/docker.sock
-    # Rootless Docker: the bind-mounted socket maps to container root (your unprivileged
-    # host user), and there is no host "docker" group to join. Run as uid 0 so the hub can
-    # reach the socket. For ROOTFUL Docker revert this to "1000:<your-docker-gid>".
-    user: "0:0"
-    # No `command:` and no nomad.yaml / .volumes/fs mounts -- unlike the app image, this one's
-    # entrypoint IS the hub, it never reads nomad.yaml, and it needs no view of the upload
-    # tree: the spawner hands HOST paths to the docker daemon.
-    healthcheck:
-      test:
-        - "CMD"
-        - "curl"
-        - "--fail"
-        - "--silent"
-        - "http://localhost:8081/nomad-oasis/north/hub/health"
-      interval: 10s
-      timeout: 10s
-      retries: 30
-      start_period: 10s
-    depends_on:
-      app:
-        condition: service_healthy
 
   # nomad logtransfer
   # to enable the logtransfer service run "docker compose --profile with_logtransfer up"
@@ -443,21 +378,9 @@ services:
         condition: service_healthy
       worker:
         condition: service_started # TODO: service_healthy
-      north:
-        condition: service_healthy
     ports:
       - 80:80
       - 443:443
-
-  # jupyterlab image: (this is only used to pull the image, no service is run for this)
-  jupyterlab_image:
-    image: ghcr.io/crc270-hommage/nomad-oasis/jupyter:main
-    platform: linux/amd64
-    container_name: nomad_jupyter_image
-    pull_policy: always
-    entrypoint: ["true"]
-    deploy:
-      replicas: 0 # Ensures the service isn't started
 
 volumes:
   mongo:
@@ -468,8 +391,6 @@ volumes:
     name: "nomad_oasis_keycloak"
   postgresql:
     name: "nomad_oasis_postgresql"
-  nomad_north:
-    name: "nomad_oasis_north"
 
 
 networks:

@@ -82,7 +82,10 @@ location ~ /api/v1/.*/download {
 
 location /nomad-oasis/north/ {
     client_max_body_size 500m;
-    proxy_pass http://north:9000;
+    # NORTH runs on the GPU host (.102), reached over WireGuard -- `north` no longer resolves
+    # via docker DNS here. An IP literal also sidesteps nginx's startup-only DNS resolution.
+    # Port 9000 is the hub's PUBLIC proxy port (8081 is its internal API and never crosses hosts).
+    proxy_pass http://10.10.0.2:9000;
 
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header Host $host;
