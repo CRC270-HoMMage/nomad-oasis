@@ -1,0 +1,162 @@
+# NORTH hub — deployed on TITAN (.102, the GPU host), NOT on samarium.
+# See the GPU-NORTH deployment runbook, Phase 4. (That document is kept out of this public
+# repo; it describes live host topology.)
+#
+# The hub spawns sessions onto THIS host's docker daemon, which is the whole point of the
+# split: hub<->session traffic never crosses hosts, and the sessions land where the GPUs are.
+#
+# Deploy:
+#   cd ~/nomad-oasis && docker compose -f docker-compose.north.yml up -d
+#
+# Host prerequisites on titan (none of them are created by this file):
+#   sudo install -d -o 1003 -g 998 -m 750 /srv/nomad-north/hub-data   # -o = NORTH_HUB_UID
+#   sudo ufw allow in on wg0 from 10.10.0.1 to any port 9000 proto tcp
+#   /srv/nomad-north/fs mounted (runbook Phase 1e) — sessions bind-mount paths beneath it
+#
+# ⚠️ ALSO REQUIRED, on SAMARIUM: the app must publish its API on the WireGuard address, i.e.
+# NOMAD_APP_WG_BIND=10.10.0.1 in samarium's .env plus a redeploy. Committed as 88ebfed but NOT
+# deployed as of 2026-08-06 — verified from titan, tcp/8000 is refused. Without it the hub comes
+# up perfectly healthy and then cannot resolve a single tool, because /north/tools/ is
+# unreachable. Check before deploying:  curl -m5 http://10.10.0.1:8000/nomad-oasis/alive
+#
+# Addresses, uid and the docker GID are parameterised so this file is safe in a public repo and
+# starts on a host without wg0. Set them in .env next to this file:
+#   NORTH_WG_BIND=10.10.0.2      # titan's WireGuard address
+#   NOMAD_APP_WG_IP=10.10.0.1    # samarium's WireGuard address
+#   NORTH_DOCKER_GID=998         # `getent group docker` on titan
+#   NORTH_HUB_UID=1003           # the operator's uid — NOT 1000, that is another user
+
+services:
+  # ⚠️ The service MUST be named `north`. The hub's HUB_CONNECT_IP defaults to the literal
+  # string "north" — that is the address SPAWNED SESSIONS use to call the hub back. Compose
+  # publishes the service name as a network alias on nomad_north_net, and sessions join that
+  # network, so `north` resolves. Rename this and sessions hang at startup rather than failing
+  # loudly. If you must rename it, set HUB_CONNECT_IP explicitly.
+  north:
+    restart: unless-stopped
+    # The DEDICATED hub image: its entrypoint IS the hub. Not the app image with
+    # `admin run hub` — that is the pre-2026-08-05 shape and it is not what samarium runs.
+    #
+    # ⚠️ PAIRED WITH configs/nomad.yaml's `north.enable_new_hub_api: true`. The flag selects
+    # which router the APP exposes and the two route sets are disjoint; this image calls
+    # /north/mounts/<tool> unconditionally, so with the flag false it 404s and dies with
+    # "TypeError: string indices must be integers". Never change one without the other.
+    image: ghcr.io/fairmat-nfdi/nomad-north:main
+    platform: linux/amd64
+    container_name: nomad_oasis_north
+
+    # TEMPORARY — the GPU overlay. Delete this `command:` and the config mount below once
+    # upstream PR #6 restores use_gpu; see the header of configs/jupyterhub_config_gpu.py.
+    # The image's own CMD is commented out upstream, so naming the config file explicitly is
+    # also more robust than relying on the base image's default.
+    command: ["jupyterhub", "-f", "/srv/jupyterhub/jupyterhub_config_gpu.py"]
+
+    security_opt:
+      - no-new-privileges:true
+
+    # titan is ROOTFUL, so this is a real host uid and the real `docker` group gid.
+    # NOT "0:0" — on samarium that is an unprivileged user inside a rootless namespace; here it
+    # would be actual root. The mounted socket is already root-equivalent, so this is defence in
+    # depth rather than containment, but it is free.
+    #
+    # ⚠️ Do NOT use uid 1000 on titan: that is `groenewald`, an unrelated researcher. The hub
+    # touches only /data and the socket (it has no view of the upload tree), so its uid is free
+    # to be the operator's own — 1003 (demuth) on titan. Sessions are unaffected: they run as
+    # jovyan/1000 in their own containers, matching what bindfs presents.
+    user: "${NORTH_HUB_UID:-1000}:${NORTH_DOCKER_GID:-998}"
+
+    # ⚠️ REQUIRED whenever the hub runs as non-root. JupyterHub writes its proxy pid file to a
+    # RELATIVE path, so it lands in the cwd — /srv/jupyterhub, which is root-owned. The hub then
+    # dies at startup with `PermissionError: 'jupyterhub-proxy.pid'` AFTER reporting that it is
+    # starting the proxy, which reads like a proxy fault rather than a permissions one.
+    # samarium never hits this because its hub runs as uid 0. Verified on titan 2026-08-06:
+    # without this the container exits 1; with it, healthy in 5s.
+    working_dir: /data
+
+    environment:
+      # The hub reads its entire config from env vars — pydantic BaseSettings with no prefix,
+      # so each field maps directly (nomad_api_url -> NOMAD_API_URL).
+      #
+      # samarium's app API over WireGuard. NOT http://app:8000 — that compose DNS name does
+      # not exist on this host.
+      NOMAD_API_URL: "http://${NOMAD_APP_WG_IP:-127.0.0.1}:8000/nomad-oasis/api/v1"
+      DOCKER_PREFIX: "nomad-oasis-north"
+      # Must equal the network name at the bottom of this file: it is where the hub attaches
+      # spawned sessions, and where they resolve the `north` alias to call back.
+      DOCKER_NETWORK: "nomad_north_net"
+      # Deliberately absent: NOMAD_MONGO_HOST / NOMAD_ELASTIC_HOST. The hub talks to NOMAD
+      # purely over HTTP with a bearer token and never touches the databases. Do not add them.
+
+    env_file:
+      # Generated by scripts/generate-env.sh. Three constraints, each of which has already
+      # cost time:
+      #   SERVICE_API_TOKEN   must EQUAL samarium's .env NOMAD_NORTH_HUB_SERVICE_API_TOKEN
+      #   OAUTH_CALLBACK_URL  stays SAMARIUM's public https URL — it is where the user's
+      #                       BROWSER returns, never a host-to-host address
+      #   KEYCLOAK_URL        must keep its /auth suffix, or every tool launch 403s with
+      #                       "auth has expired for <user>, login again"
+      - ./.env.north
+
+    volumes:
+      # titan's LOCAL docker socket — ROOTFUL path. samarium's is /run/user/1000/docker.sock.
+      - /var/run/docker.sock:/var/run/docker.sock
+
+      # Hub DB + cookie secrets. A HOST DIR, not a named volume: docker creates named volumes
+      # root-owned, and a hub running as uid 1000 then cannot create jupyterhub.sqlite. It is
+      # deliberately LOCAL storage, not under the NFS mount — sqlite locking over NFS is
+      # unreliable, and the hub DB would vanish whenever samarium is down. Losing it presents
+      # as "403 auth has expired" on every launch, since user records and auth_state go with it.
+      - /srv/nomad-north/hub-data:/data
+
+      # TEMPORARY — see the `command:` above.
+      - ./configs/jupyterhub_config_gpu.py:/srv/jupyterhub/jupyterhub_config_gpu.py:ro
+
+      # NOTE: no nomad.yaml mount and no .volumes/fs mount. Unlike the app image, this one
+      # never reads nomad.yaml, and it needs no view of the upload tree — it hands HOST PATHS
+      # to the docker daemon, which is why those paths must resolve on THIS host (runbook 1f).
+
+    ports:
+      # 9000 is the hub's PUBLIC proxy port: both samarium's app and samarium's nginx connect
+      # here. Bound to titan's WireGuard address only, so it never appears on the campus-facing
+      # interface. Defaults to loopback so a host without wg0 still starts — docker refuses to
+      # bind an address that does not exist.
+      #
+      # ⚠️ Publishing a port and permitting a port are separate acts: with ufw's default deny
+      # this also needs the `ufw allow in on wg0 ... port 9000` rule listed at the top.
+      #
+      # 8081 is JupyterHub's INTERNAL hub API (spawned sessions calling back, plus the
+      # healthcheck below). Local to titan. MUST NOT be published.
+      - "${NORTH_WG_BIND:-127.0.0.1}:9000:9000"
+
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8081/nomad-oasis/north/hub/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 10s
+
+  # Pre-pull helper — moved here from samarium, which spawns nothing after the split. Never
+  # runs (replicas: 0, entrypoint true); it exists so `docker compose pull` fetches the tool
+  # image onto the daemon that SPAWNS tools. Worth more here than it was there: the GPU image
+  # is 15.1 GB on disk / 4.62 GB to transfer.
+  #
+  # ⚠️ Commented out until the GPU image is published to GHCR — `pull_policy: always` fails
+  # against an image that is not there, and it currently exists only as a local build on titan.
+  # ⚠️ When enabled, this ref MUST MATCH the tool image in configs/nomad.yaml exactly. Drift
+  # means this pre-pulls one image while NOMAD spawns another; the symptom is a slow first
+  # launch and nothing else, so it will not announce itself.
+  #
+  # jupyterlab_image:
+  #   image: ghcr.io/crc270-hommage/nomad-oasis/jupyter-gpu:main
+  #   platform: linux/amd64
+  #   container_name: nomad_jupyter_image
+  #   pull_policy: always
+  #   entrypoint: ["true"]
+  #   deploy:
+  #     replicas: 0
+
+networks:
+  default:
+    name: nomad_north_net
+
+# No top-level `volumes:` — /data is a host dir, see the volumes section above.
