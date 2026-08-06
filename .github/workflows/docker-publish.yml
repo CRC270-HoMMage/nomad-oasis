@@ -175,6 +175,80 @@ jobs:
       app_image: ${{ env.app_IMAGE }}
       jupyter_image: ${{ env.jupyter_IMAGE }}
 
+  # Job 3b: Build and push the CUDA Jupyter image, used by GPU-backed NORTH.
+  #
+  # ⚠️ Deliberately its OWN JOB, not a third entry in the `build` matrix above. Two reasons,
+  # and the first is not cosmetic:
+  #
+  #   1. Matrix legs SHARE one `outputs` object, and the last leg to finish wins -- including
+  #      its EMPTY values. `build` publishes app_image/jupyter_image for run_tests, and that
+  #      works today only because the app leg happens to finish last (6:06 vs 6:01). This
+  #      build takes far longer, so as a matrix leg it would reliably finish last and blank
+  #      both outputs, breaking run_tests with an error pointing nowhere near the cause.
+  #   2. It needs runner disk cleanup and its own cache settings; the other two want neither.
+  #
+  # Not a dependency of run_tests: nothing in the test suite exercises the GPU image, and
+  # keeping it off that path means a slow or failing GPU build cannot hold up the gate.
+  build-gpu:
+    name: Build Docker Image (jupyter-gpu)
+    runs-on: ubuntu-latest
+    needs: update-lockfile
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+          submodules: true
+
+      # The CUDA image is ~15 GB unpacked (~4.6 GB transferred). A stock ubuntu-latest runner
+      # has roughly 25 GB free, which buildx can exhaust while assembling layers. That failure
+      # arrives as an opaque "no space left on device" ten-plus minutes in, so the cleanup is
+      # cheaper than the diagnosis.
+      - name: Free runner disk space
+        run: |
+          echo "before:"; df -h / | tail -1
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /usr/local/share/boost /usr/share/swift "${AGENT_TOOLSDIRECTORY:-}" || true
+          sudo docker image prune -af || true
+          echo "after:";  df -h / | tail -1
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}/jupyter-gpu
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          build-args: |
+            UV_VERSION=${{ env.UV_VERSION }}
+            PYTHON_VERSION=${{ env.PYTHON_VERSION }}
+            NOMAD_DOCS_REPO=${{ env.NOMAD_DOCS_REPO }}
+            NOMAD_DOCS_REPO_REF=${{ env.NOMAD_DOCS_REPO_REF }}
+            JUPYTER_VERSION=${{ env.JUPYTER_VERSION }}
+          # Its own cache scope, and mode=min. GitHub caps Actions cache at 10 GB per repo,
+          # and this image alone exceeds that with mode=max -- it would evict the app and
+          # jupyter caches on every run, making every build slower to speed up none of them.
+          cache-from: type=gha,scope=jupyter-gpu
+          cache-to: type=gha,mode=min,scope=jupyter-gpu
+          # The CUDA base is pinned by digest in the Dockerfile (JUPYTER_GPU_IMAGE), so this
+          # build is reproducible without a build-arg here. Bump it together with
+          # JUPYTER_VERSION so the CPU and GPU images keep sharing a Jupyter base.
+          target: jupyter_gpu
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
   # Job 4: Run example upload tests and entrypoint tests
   run_tests:
     name: Run example upload tests and entrypoint tests
