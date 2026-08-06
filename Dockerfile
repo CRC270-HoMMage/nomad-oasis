@@ -6,7 +6,7 @@
 
 ARG PYTHON_VERSION=3.12
 ARG UV_VERSION=0.7
-ARG JUPYTER_VERSION=2025-04-14
+ARG JUPYTER_VERSION=2026-08-03
 
 # GPU-enabled Jupyter base for NORTH -- see the GPU-NORTH deployment runbook, Phase 2. That
 # document is kept OUT of this public repo (it describes live host topology); ask the maintainer.
@@ -14,12 +14,22 @@ ARG JUPYTER_VERSION=2025-04-14
 # before the first FROM. Declared after a FROM it belongs to that build stage and would
 # expand to empty in a later FROM.
 #
-# Pinned by DIGEST, not tag. `cuda12-latest` is a moving target and titan's driver
-# (535.309.01) caps CUDA at 12.4, so the day upstream ships a CUDA 13 variant a tag would
-# silently break every GPU session. This digest is
-# quay.io/jupyter/pytorch-notebook:cuda12-2025-04-14 -- deliberately the same date as
-# JUPYTER_VERSION above so the CPU and GPU images share a Jupyter base. Bump both together.
-ARG JUPYTER_GPU_IMAGE=quay.io/jupyter/pytorch-notebook@sha256:f367f2e89305939f3f37e8cc1271c0b3c60863a26861138fe5438acc3aafaa3d
+# Pinned by DIGEST, not tag, for REPRODUCIBILITY: a moving tag makes rebuilds
+# non-deterministic and couples them to upstream's release schedule.
+#
+# ⚠️ Do NOT reinstate the older rationale that this pin guards against CUDA 13. That was written
+# when the GPU host ran driver 535.309.01 (CUDA 12.4 ceiling). It now runs 580.173.02 (CUDA 13.0),
+# and quay.io/jupyter publishes a `cuda13-` variant that would initialise fine. Staying on cuda12
+# is a conservative default, not a constraint -- moving to cuda13 is a deliberate change worth
+# verifying on its own rather than smuggling into a date bump.
+#
+# This digest is quay.io/jupyter/pytorch-notebook:cuda12-2026-08-03 -- deliberately the SAME DATE
+# as JUPYTER_VERSION above, so the CPU and GPU images share a Jupyter base.
+#
+# ⚠️ BUMP BOTH TOGETHER. To resolve the digest for a new date:
+#   curl -s 'https://quay.io/api/v1/repository/jupyter/pytorch-notebook/tag/?onlyActiveTags=true&specificTag=cuda12-<DATE>' \
+#     | python3 -c 'import json,sys; print(json.load(sys.stdin)["tags"][0]["manifest_digest"])'
+ARG JUPYTER_GPU_IMAGE=quay.io/jupyter/pytorch-notebook@sha256:69c72823a4e0dbee17114bbe44d0377bc9a39504a76f6314995f7d5bfaa98d60
 
 FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv_image
 
