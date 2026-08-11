@@ -273,6 +273,15 @@ WORKDIR "${HOME}"
 COPY --from=uv_image /uv /bin/uv
 COPY --from=jupyter_builder /opt/conda /opt/conda
 
+# ⚠️ SMOKE TEST — do not remove. `start-notebook.py` branches on the JUPYTERHUB_* env: run
+# standalone it execs `jupyter lab`, which never imports jupyterhub; spawned by the hub it
+# execs `jupyterhub-singleuser`, which does. Only NORTH takes the second path, so a broken
+# singleuser is completely invisible to `docker run <image>` (it starts JupyterLab and looks
+# healthy) and shows up only as a session that starts, exits, and leaves the hub timing out
+# 300s later. Failing the build is the only cheap place to catch it.
+RUN python -c "import jupyterhub.singleuser" \
+ && jupyterhub-singleuser --version
+
 
 # Get rid ot the following message when you open a terminal in jupyterlab:
 # groups: cannot find name for group ID 11320
@@ -328,13 +337,37 @@ WORKDIR "${HOME}"
 
 COPY --from=uv_image /uv /bin/uv
 
+# ⚠️ Purge the base image's alembic BEFORE syncing. `--inexact` (below) protects the base's
+# CUDA torch by never removing pre-installed packages -- which also means uv overwrites a
+# base-installed package's files WITHOUT deleting the files that version had and uv's does
+# not. That orphaning is longstanding and normally harmless; it is invisible whenever the two
+# versions share a file layout. The older base orphaned alembic 1.15.2 under uv's 1.16.5 for
+# weeks with no ill effect.
+#
+# It stopped being harmless with the 2026-08-03 base (see JUPYTER_GPU_IMAGE above), which
+# ships alembic 1.18.5 against uv.lock's 1.16.5. Alembic turned `autogenerate/compare` from a
+# module into a PACKAGE between those versions, so the orphan was a `compare/` directory
+# sitting next to uv's `compare.py` -- and a package shadows a same-named module. The base's
+# 1.18.5 code won the import and called into uv's 1.16.5 `util`:
+#     ImportError: cannot import name 'PriorityDispatchResult' from 'alembic.util'
+# `jupyterhub-singleuser` died on import, so every GPU NORTH session started, exited 1 after
+# ~2s, and left the hub waiting out its full 300s timeout -- surfacing to users as "spawn
+# timed out", three hops from the cause. `conda list` still reported a clean "alembic 1.16.5";
+# the only on-disk trace was two alembic-*.dist-info directories. Broke 2026-08-06 16:37 (the
+# commit that pointed NORTH at this image), found 2026-08-11, masked for three days in between
+# by an unrelated GPU driver outage that failed spawns one hop earlier.
+#
+# Do NOT "fix" this by dropping --inexact: that would replace the base's CUDA torch. The next
+# base bump may collide on some other package, so this line is only the specific remedy --
+# the singleuser smoke test in the final stage below is the general guard.
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     # Use inexact to avoid removing pre-installed packages in the environment
     # -- this is what protects the base image's CUDA torch, see the note above
     # Use no-install-project to skip installing the current project (`nomad-distribution`)
-    uv sync --extra plugins --extra jupyter --no-install-project --inexact
+    uv pip uninstall --python /opt/conda/bin/python alembic \
+ && uv sync --extra plugins --extra jupyter --no-install-project --inexact
 
 
 FROM ${JUPYTER_GPU_IMAGE} AS jupyter_gpu
@@ -367,6 +400,13 @@ WORKDIR "${HOME}"
 
 COPY --from=uv_image /uv /bin/uv
 COPY --from=jupyter_gpu_builder /opt/conda /opt/conda
+
+# ⚠️ SMOKE TEST — do not remove. See the identical guard in the `jupyter` stage for why a
+# broken singleuser is invisible to a manual `docker run`. This is the check that would have
+# caught the alembic collision documented in jupyter_gpu_builder at build time instead of
+# three days later, and it is the general guard for whatever the NEXT base bump collides on.
+RUN python -c "import jupyterhub.singleuser" \
+ && jupyterhub-singleuser --version
 
 # Get rid ot the following message when you open a terminal in jupyterlab:
 # groups: cannot find name for group ID 11320
