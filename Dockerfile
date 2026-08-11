@@ -271,6 +271,23 @@ USER ${NB_UID}
 WORKDIR "${HOME}"
 
 COPY --from=uv_image /uv /bin/uv
+
+# ⚠️ THE SECOND ORPHANING POINT, and the one that actually bites. This stage starts FROM the
+# same base image as its builder, so it holds its OWN copy of the base's alembic -- and `COPY`
+# MERGES into an existing directory, it never replaces it. The builder's clean tree therefore
+# lands on top of that copy and the orphaned files come straight back, so cleaning only the
+# builder achieves nothing.
+#
+# CI proved this on 2026-08-11: the builder step logged a clean
+#     Uninstalled 1 package  - alembic==1.18.5
+#     + alembic==1.16.5
+# and the very next step -- `COPY --from=jupyter_builder /opt/conda /opt/conda` -- brought the
+# collision back, failing the smoke test below. Remove the base's copy BEFORE the merge.
+#
+# Both bases ship alembic (base-notebook AND pytorch-notebook, 2026-08-03), so both final
+# stages need this. If a future base collides on some other package, the smoke test is what
+# will tell you -- add it here as well rather than restructuring the COPY.
+RUN uv pip uninstall --python /opt/conda/bin/python alembic
 COPY --from=jupyter_builder /opt/conda /opt/conda
 
 # ⚠️ SMOKE TEST — do not remove. `start-notebook.py` branches on the JUPYTERHUB_* env: run
@@ -399,6 +416,12 @@ USER ${NB_UID}
 WORKDIR "${HOME}"
 
 COPY --from=uv_image /uv /bin/uv
+
+# ⚠️ Purge the base's alembic before the COPY merges the builder's tree in. See the `jupyter`
+# stage for the full explanation -- the short version is that this stage shares the builder's
+# base image, so it has a second copy of the base's alembic, and COPY merges rather than
+# replaces. Cleaning the builder alone provably does not work.
+RUN uv pip uninstall --python /opt/conda/bin/python alembic
 COPY --from=jupyter_gpu_builder /opt/conda /opt/conda
 
 # ⚠️ SMOKE TEST — do not remove. See the identical guard in the `jupyter` stage for why a
