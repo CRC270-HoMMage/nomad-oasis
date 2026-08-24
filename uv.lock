@@ -3108,7 +3108,7 @@ requires-dist = [
     { name = "nomad-lab", extras = ["dev", "infrastructure"], marker = "extra == 'dev'", specifier = "==1.4.3" },
     { name = "nomad-lab", extras = ["infrastructure"], specifier = "==1.4.3" },
     { name = "nomad-measurements", marker = "extra == 'plugins'", git = "https://github.com/CRC270-HoMMage/nomad-measurements.git?rev=b57bdd183445e7f7fb63729bf4c68070b136c11d" },
-    { name = "nomad-mpms", marker = "extra == 'plugins'", git = "https://github.com/CRC270-HoMMage/nomad-mpms.git?subdirectory=nomad-mpms&rev=4e45912a79a82d3da0ca0c7c243d148cd7700e0f" },
+    { name = "nomad-mpms", marker = "extra == 'plugins'", git = "https://github.com/CRC270-HoMMage/nomad-mpms.git?subdirectory=nomad-mpms&rev=e6eb13404904aff51cb4178047edf7041d5dd598" },
     { name = "nomad-north-jupyter", marker = "extra == 'plugins'", specifier = ">=0.2.6" },
     { name = "nomad-sfb270-eln", marker = "extra == 'plugins'", git = "https://github.com/CRC270-HoMMage/nomad-plugin-crc270eln.git?rev=6afa9de050f2f9c79487586c8848b2c21d6649d6" },
 ]
@@ -3250,7 +3250,7 @@ dependencies = [
 [[package]]
 name = "nomad-mpms"
 version = "0.1.0"
-source = { git = "https://github.com/CRC270-HoMMage/nomad-mpms.git?subdirectory=nomad-mpms&rev=4e45912a79a82d3da0ca0c7c243d148cd7700e0f#4e45912a79a82d3da0ca0c7c243d148cd7700e0f" }
+source = { git = "https://github.com/CRC270-HoMMage/nomad-mpms.git?subdirectory=nomad-mpms&rev=e6eb13404904aff51cb4178047edf7041d5dd598#e6eb13404904aff51cb4178047edf7041d5dd598" }
 dependencies = [
     { name = "nomad-lab" },
     { name = "plotly" },

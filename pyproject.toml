@@ -33,7 +33,7 @@ repository = "https://github.com/crc270-hommage/nomad-oasis"
 plugins = [
   "nomad-north-jupyter>=0.2.6",
   "nomad-measurements @ git+https://github.com/CRC270-HoMMage/nomad-measurements.git@b57bdd183445e7f7fb63729bf4c68070b136c11d",
-  "nomad-mpms @ git+https://github.com/CRC270-HoMMage/nomad-mpms.git@4e45912a79a82d3da0ca0c7c243d148cd7700e0f#subdirectory=nomad-mpms",
+  "nomad-mpms @ git+https://github.com/CRC270-HoMMage/nomad-mpms.git@e6eb13404904aff51cb4178047edf7041d5dd598#subdirectory=nomad-mpms",
   "nomad-sfb270-eln @ git+https://github.com/CRC270-HoMMage/nomad-plugin-crc270eln.git@6afa9de050f2f9c79487586c8848b2c21d6649d6",
 ]
 jupyter = ["jupyter-events"]
