@@ -37,7 +37,12 @@ plugins = [
   # ships from there, so the separate pin is gone. Bump these two together only —
   # dropping the eln pin against an older nomad-mpms would remove data.specimen.*
   # and break the magnetic-measurements app.
-  "nomad-mpms @ git+https://github.com/CRC270-HoMMage/nomad-mpms.git@897b3c83fa5d8f7fc9904e0d224c3018eba8ced0#subdirectory=nomad-mpms",
+  #
+  # No `#subdirectory=` any more: nomad-mpms was flattened at c879c87 so its
+  # pyproject.toml sits at the repo root. The fragment was never honoured by
+  # nomad-plugin-tests anyway, which is why that plugin's CI shard failed with
+  # `File not found: pyproject.toml` before running a single test.
+  "nomad-mpms @ git+https://github.com/CRC270-HoMMage/nomad-mpms.git@c879c8751b9e7ce6e477fec17650143a7d0921d9",
 ]
 jupyter = ["jupyter-events"]
 gpu-action = []
