@@ -100,6 +100,49 @@ north:
   # KEYCLOAK_URL in .env.north missing its /auth suffix. See scripts/generate-env.sh.
   enable_new_hub_api: true
 
+  # SmCo-1:7 coercivity toolkit (Streamlit), built from the PRIVATE repo d-demuth/NORTH-Test.
+  # Declared here instead of pinning that repo's plugin in pyproject.toml: the repo must stay
+  # private (it holds trained models), and CI cannot git-install a private repo. nomad-lab turns
+  # every entry below into a NORTHToolEntryPoint (config.py, "Handle NORTH tools defined in
+  # nomad.yaml"), so the new hub API serves it like any plugin tool. The definition mirrors
+  # src/nomad_north_smco/north_tools/__init__.py there -- keep the two in sync.
+  #
+  # ⚠️ EITHER this entry OR the plugin, never both. If nomad-north-smco is ever pinned in
+  # pyproject.toml, delete this block in the same commit: both claim the URL id `smco-toolkit`,
+  # and load_plugins() then raises "URL-safe identifier collision", so the app fails to start.
+  #
+  # ⚠️ The image is PRIVATE on ghcr.io and the hub holds no registry credentials, so it can never
+  # pull it itself. It is pre-pulled on titan by the `smco_image` service in
+  # docker-compose.north.yml, after `docker login ghcr.io`. That pull is also the only way an
+  # updated :main reaches titan (dockerspawner's pull_policy is `ifnotpresent`).
+  #
+  # ⚠️ The hub caches its tool list (profile_list is a lazy cached_property), so after the app
+  # picks up a change here, restart the hub on titan or it keeps serving the old list.
+  tools:
+    options:
+      # The key becomes the tool's URL id: /north/tools/smco-toolkit, session smco-toolkit.
+      smco-toolkit:
+        display_name: SmCo-1:7 Coercivity Toolkit
+        short_description: >-
+          ML surrogate models for coercivity of SmCo-1:7 magnets from nanostructure.
+        description: >-
+          Streamlit app predicting coercivity (Hc) and inhomogeneity factor (Phi_p) of
+          SmCo-1:7 permanent magnets from nanostructural and micromagnetic parameters, and
+          inverting that mapping. Mechanics of Functional Materials Division, TU Darmstadt;
+          Yang et al., npj Comput Mater 12, 204 (2026), doi:10.1038/s41524-026-02174-y.
+        image: ghcr.io/d-demuth/north-test:main
+        # Served by jupyter-server-proxy inside the image; the session root redirects here.
+        default_url: /streamlit/
+        # Required even though the app reads no uploads: NOMAD joins it to build the session
+        # mounts, and a missing value makes /north/mounts/<tool> fail.
+        mount_path: /home/jovyan
+        with_path: false
+        file_extensions: []
+        privileged: false
+        maintainer:
+          - name: Dominik Demuth
+            email: dominik.demuth@tu-darmstadt.de
+
 # ✅ ACTIVE since the NORTH hub moved to the GPU host (.102). See the GPU-NORTH deployment
 # runbook, §1f and Phase 5 -- kept out of this public repo, since it describes live host topology.
 #

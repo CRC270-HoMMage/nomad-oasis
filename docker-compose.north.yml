@@ -158,6 +158,24 @@ services:
     deploy:
       replicas: 0
 
+  # Pre-pull helper for the SmCo-1:7 toolkit (configs/nomad.yaml, north.tools.smco-toolkit).
+  # Same pattern as jupyterlab_image above, with one difference that makes it MANDATORY rather
+  # than a warm-up: the image is PRIVATE, and the hub has no registry credentials, so a session
+  # can only start from a copy that is already on this host. Pull as the operator:
+  #   docker login ghcr.io -u <github-user>     # PAT (classic) with read:packages
+  #   docker compose -f docker-compose.north.yml pull smco_image
+  # Without the login, a plain `... pull` fails on this service; the others still work with
+  # `--ignore-pull-failures`.
+  #
+  # ⚠️ This ref MUST MATCH `image:` under north.tools.smco-toolkit in configs/nomad.yaml.
+  smco_image:
+    image: ghcr.io/d-demuth/north-test:main
+    platform: linux/amd64
+    pull_policy: always
+    entrypoint: ["true"]
+    deploy:
+      replicas: 0
+
 networks:
   default:
     name: nomad_north_net
