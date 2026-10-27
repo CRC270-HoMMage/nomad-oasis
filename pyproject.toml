@@ -10,7 +10,6 @@ classifiers = [
   "Intended Audience :: Developers",
   "Operating System :: OS Independent",
   "Programming Language :: Python",
-  "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
 ]
@@ -18,11 +17,10 @@ name = "nomad-distribution"
 description = "nomad distribution template"
 dynamic = ["version"]
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = { file = "LICENSE" }
 dependencies = [
-  "nomad-lab[infrastructure]==1.4.3", 
-  "nomad-gui==2.0.0b1",
+  "nomad-lab[infrastructure]==2.0.0",
 ]
 
 [project.urls]
@@ -32,6 +30,7 @@ repository = "https://github.com/crc270-hommage/nomad-oasis"
 # Add your plugins to the list below.
 plugins = [
   "nomad-north-jupyter>=0.2.6",
+  "nomad-gui==2.0.0",
   "nomad-measurements @ git+https://github.com/CRC270-HoMMage/nomad-measurements.git@b57bdd183445e7f7fb63729bf4c68070b136c11d",
   # nomad-sfb270-eln was absorbed into nomad-mpms at 897b3c8. Its schema package now
   # ships from there, so the separate pin is gone. Bump these two together only —
@@ -48,7 +47,7 @@ jupyter = ["jupyter-events"]
 gpu-action = []
 cpu-action = []
 
-dev = ["nomad-lab[infrastructure, dev]==1.4.3"]
+dev = ["nomad-lab[infrastructure, dev]==2.0.0"]
 
 [tool.uv]
 extra-index-url = [

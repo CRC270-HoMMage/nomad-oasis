@@ -148,7 +148,6 @@ services:
       NOMAD_SERVICE: nomad_oasis_worker
       NOMAD_ELASTIC_HOST: elastic
       NOMAD_MONGO_HOST: mongo
-      NOMAD_LOGSTASH_HOST: logtransfer
       NOMAD_TEMPORAL_HOST: temporal
     env_file:
       - ./.env
@@ -201,7 +200,6 @@ services:
   #     NOMAD_SERVICE: nomad_oasis_gpu_worker
   #     NOMAD_ELASTIC_HOST: elastic
   #     NOMAD_MONGO_HOST: mongo
-  #     NOMAD_LOGSTASH_HOST: logtransfer
   #     NOMAD_TEMPORAL_HOST: temporal
   #   depends_on:
   #     elastic:
@@ -238,7 +236,6 @@ services:
   #     NOMAD_SERVICE: nomad_oasis_cpu_worker
   #     NOMAD_ELASTIC_HOST: elastic
   #     NOMAD_MONGO_HOST: mongo
-  #     NOMAD_LOGSTASH_HOST: logtransfer
   #     NOMAD_TEMPORAL_HOST: temporal
   #   deploy:
   #     replicas: 1
@@ -283,7 +280,6 @@ services:
       NOMAD_FS_EXTERNAL_WORKING_DIRECTORY: "$PWD"
       NOMAD_ELASTIC_HOST: elastic
       NOMAD_MONGO_HOST: mongo
-      NOMAD_LOGSTASH_HOST: logtransfer
       # NORTH runs on the GPU host (.102) and is reached over WireGuard. This is where the
       # app builds its app->hub URL from: http://{hub_host}:{hub_port}{api_base_path}/north/hub.
       NOMAD_NORTH_HUB_HOST: 10.10.0.2
@@ -331,30 +327,6 @@ services:
       timeout: 10s
       retries: 30
       start_period: 10s
-
-  # nomad logtransfer
-  # to enable the logtransfer service run "docker compose --profile with_logtransfer up"
-  logtransfer:
-    restart: unless-stopped
-    image: ghcr.io/crc270-hommage/nomad-oasis:main
-    security_opt:
-      - no-new-privileges:true
-    environment:
-      NOMAD_SERVICE: nomad_oasis_logtransfer
-      NOMAD_ELASTIC_HOST: elastic
-      NOMAD_MONGO_HOST: mongo
-    env_file:
-      - ./.env
-    depends_on:
-      elastic:
-        condition: service_healthy
-      mongo:
-        condition: service_healthy
-    volumes:
-      - ./configs/nomad.yaml:/app/nomad.yaml:ro
-      - ./.volumes/fs:/app/.volumes/fs
-    command: python -m nomad.cli admin run logtransfer
-    profiles: ["with_logtransfer"]
 
   # nomad proxy (a reverse proxy for nomad)
   proxy:

@@ -19,7 +19,7 @@ auth:
     # NOMAD account. Must be the maintainer's CENTRAL NOMAD account e-mail (the
     # nomad-lab.eu login), which may differ from their institutional address.
     # Recovery if locked out: fix the list / env var and
-    # `docker compose restart app worker north logtransfer`.
+    # `docker compose restart app worker`.
     - dominik.demuth@tu-darmstadt.de
 
 
@@ -69,7 +69,6 @@ mongo:
 
 elastic:
   entries_index: nomad_oasis_entries_v1
-  materials_index: nomad_oasis_materials_v1
 
 north:
   enabled: true
