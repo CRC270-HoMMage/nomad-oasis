@@ -48,16 +48,12 @@ location @redirect_to_index {
     proxy_pass http://nomad-app-backend;
 }
 
+# The image no longer builds docs (NOMAD_DOCS_REPO is empty in docker-publish.yml), and
+# nomad-lab 2.0 links the official docs via `documentation.url` instead of serving its own.
+# Old bookmarks go there too. The previous 404 -> /docs/404.html rule must not come back
+# without built docs: 404.html is itself a 404, so it redirected to itself forever.
 location /nomad-oasis/docs/ {
-    # This is added to force a redirect (302) when 404 otherwise
-    # the assets are not loaded correctly (a broken page rendered)
-    proxy_intercept_errors on;
-    error_page 404 = @docs404redirect;
-    proxy_pass http://nomad-app-backend;
-}
-
-location @docs404redirect {
-    return 302 /nomad-oasis/docs/404.html;
+    return 302 https://docs.nomad-lab.eu/;
 }
 
 location ~ \/gui\/(service-worker\.js|meta\.json)$ {
