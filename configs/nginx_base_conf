@@ -80,6 +80,35 @@ location ~ /api/v1/.*/download {
     proxy_pass http://nomad-app-backend;
 }
 
+# eLabFTW sample tracker -- NOT part of NOMAD. A separate compose project
+# (CRC270-HoMMage/elab-sample-tracking) that joins nomad_oasis_network as `elab-tracker`.
+#
+# The path is passed through UNSTRIPPED (proxy_pass has no URI part). The tracker runs with
+# SCRIPT_NAME=/elab-tracker and strips the prefix itself; rename one and you must rename the
+# other. A request for /elab-tracker without the slash is redirected here by nginx.
+#
+# ⚠️ Keep the `set` + `resolver` pair. A literal hostname in proxy_pass is resolved once, at
+# startup, and nginx refuses to start if it does not resolve -- so with the tracker stopped,
+# restarting this proxy would take the whole Oasis down. A variable defers the lookup to
+# request time (via Docker's embedded DNS), and a missing tracker is a 502 on this path only.
+#
+# ^~ keeps the unanchored regex locations above from ever claiming a tracker URL.
+location ^~ /elab-tracker/ {
+    resolver 127.0.0.11 valid=30s;
+    set $elab_tracker http://elab-tracker:5000;
+    proxy_pass $elab_tracker;
+
+    # A search walks a whole eLabFTW collection. Must exceed the tracker's GUNICORN_TIMEOUT
+    # (180s), or nginx gives up before gunicorn can report what went wrong.
+    proxy_read_timeout 200s;
+
+    # The tracker sets these three itself; the server block adds them to every response.
+    # Hiding the upstream copies leaves one of each instead of two that disagree.
+    proxy_hide_header X-Content-Type-Options;
+    proxy_hide_header X-Frame-Options;
+    proxy_hide_header Referrer-Policy;
+}
+
 location /nomad-oasis/north/ {
     client_max_body_size 500m;
     # NORTH runs on the GPU host (.102), reached over WireGuard -- `north` no longer resolves
