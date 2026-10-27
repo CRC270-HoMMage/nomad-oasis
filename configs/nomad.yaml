@@ -1,6 +1,10 @@
 services:
   api_host: "samarium.trr270.tu-darmstadt.de"
-  api_base_path: "/nomad-oasis"
+  # Template v2.0.0 layout: GUI at /, backend below /backend. Old /nomad-oasis URLs keep
+  # working through rewrites in configs/nginx_base_conf. ⚠️ PAIRED with BASE_URL and the
+  # NOMAD_API_URL path in docker-compose.north.yml and OAUTH_CALLBACK_URL in titan's .env.north
+  # -- the hub on titan does not read this file.
+  api_base_path: "/backend"
 
 oasis:
   is_oasis: true
@@ -51,7 +55,10 @@ plugins:
 
 meta:
   deployment: "oasis"
-  deployment_url: "https://samarium.trr270.tu-darmstadt.de/nomad-oasis/api"
+  # Set explicitly, as the Oasis configure guide asks ("should end with /api"). The template omits
+  # it because its derived default is right for plain-http localhost; here NOMAD would derive
+  # http://..., since TLS terminates in nginx and services.https is false.
+  deployment_url: "https://samarium.trr270.tu-darmstadt.de/backend/api"
   maintainer_email: "dominik.demuth@tu-darmstadt.de"
   description: "NOMAD Oasis for CRC/TRR 270 HoMMage"
   footer_links:
@@ -93,7 +100,7 @@ north:
   # Verified end to end on samarium 2026-08-05 with the dedicated image: spawns
   # ghcr.io/crc270-hommage/nomad-oasis/jupyter:main, i.e. tool resolution honours the
   # entry-point override above. Check a live deployment without attempting a launch:
-  #   curl -s <host>/nomad-oasis/api/v1/openapi.json | grep north/mounts
+  #   curl -s <host>/backend/api/v1/openapi.json | grep north/mounts
   #
   # NB: neither setting ever caused the long-running "tool never starts" failure -- that was
   # KEYCLOAK_URL in .env.north missing its /auth suffix. See scripts/generate-env.sh.

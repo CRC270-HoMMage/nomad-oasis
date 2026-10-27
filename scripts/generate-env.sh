@@ -57,7 +57,7 @@ API_HOST=$(sed -n 's/^[[:space:]]*api_host:[[:space:]]*"\?\([^"[:space:]]*\)"\?.
   "$PARENT_DIR/configs/nomad.yaml" 2>/dev/null | head -1)
 API_HOST=${API_HOST:-localhost}
 if [ "$API_HOST" = "localhost" ]; then SCHEME=http; else SCHEME=https; fi
-OAUTH_CALLBACK_URL="$SCHEME://$API_HOST/nomad-oasis/north/hub/oauth_callback"
+OAUTH_CALLBACK_URL="$SCHEME://$API_HOST/backend/north/hub/oauth_callback"
 echo "  hub OAuth callback -> $OAUTH_CALLBACK_URL"
 
 # Create the .env file and check for errors
@@ -90,7 +90,7 @@ OAUTH_CLIENT_SECRET=""
 
 # Public callback URL for the HUB's own Keycloak login (distinct from the app's login).
 # The nomad-north image defaults this to http://localhost/nomad-oasis/north/hub/oauth_callback,
-# so it is correct ONLY for a localhost Oasis. On a real domain, leaving it unset sends users
+# which is wrong twice over: the pre-2.0 path, and correct ONLY for a localhost Oasis. On a real domain, leaving it unset sends users
 # to localhost when they launch a tool and the login can never complete -- with no error
 # anywhere, because the hub is doing exactly what it was configured to do.
 #

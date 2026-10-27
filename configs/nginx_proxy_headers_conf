@@ -1,0 +1,16 @@
+# Forwarded-client headers and upstream keep-alive, shared by the server block (nginx_http.conf /
+# nginx_https.conf) and by every location in nginx_base_conf that sets a header of its own.
+#
+# ⚠️ nginx REPLACES rather than merges inherited proxy_set_header sets: a single
+# proxy_set_header in a location discards every one from the server level -- Host, the
+# X-Forwarded-* pair and the Connection "" that keep-alive requires. The GUI locations must add
+# Accept-Encoding "" (sub_filter cannot rewrite a compressed body), so they include this file
+# first. Upstream's template does not, and loses all four there.
+#
+# No .conf suffix on purpose: the nginx image auto-includes conf.d/*.conf at http level, where
+# these directives would apply to nothing we control.
+proxy_set_header Host              $host;
+proxy_set_header X-Real-IP         $remote_addr;
+proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+proxy_set_header X-Forwarded-Proto $scheme;
+proxy_set_header Connection        "";

@@ -17,7 +17,7 @@
 # NOMAD_APP_WG_BIND=10.10.0.1 in samarium's .env. Deployed and verified 2026-08-06. Without it
 # the hub comes up perfectly HEALTHY and then cannot resolve a single tool -- profile_list is a
 # lazy cached_property, so nothing complains until a user clicks Launch. Check before deploying:
-#   curl -m5 http://10.10.0.1:8000/nomad-oasis/alive        # expect 200
+#   curl -m5 http://10.10.0.1:8000/backend/alive        # expect 200
 # A refused connection means the app is not bound there; a timeout means ufw. They are different
 # faults and the distinction is the whole diagnosis.
 #
@@ -81,7 +81,12 @@ services:
       #
       # samarium's app API over WireGuard. NOT http://app:8000 — that compose DNS name does
       # not exist on this host.
-      NOMAD_API_URL: "http://${NOMAD_APP_WG_IP:-127.0.0.1}:8000/nomad-oasis/api/v1"
+      NOMAD_API_URL: "http://${NOMAD_APP_WG_IP:-127.0.0.1}:8000/backend/api/v1"
+      # The hub's URL prefix. The image defaults it to /nomad-oasis/north/, the pre-2.0 layout.
+      # ⚠️ PAIRED with services.api_base_path in configs/nomad.yaml (the app builds its app->hub
+      # URL as {api_base_path}/north/hub), samarium's nginx `location /backend/north/`, the
+      # healthcheck below and OAUTH_CALLBACK_URL in .env.north. Change all five together.
+      BASE_URL: "/backend/north/"
       DOCKER_PREFIX: "nomad-oasis-north"
       # Must equal the network name at the bottom of this file: it is where the hub attaches
       # spawned sessions, and where they resolve the `north` alias to call back.
@@ -131,7 +136,7 @@ services:
       - "${NORTH_WG_BIND:-127.0.0.1}:9000:9000"
 
     healthcheck:
-      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8081/nomad-oasis/north/hub/health"]
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8081/backend/north/hub/health"]
       interval: 10s
       timeout: 10s
       retries: 30

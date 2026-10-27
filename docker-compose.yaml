@@ -287,7 +287,7 @@ services:
     env_file:
       - ./.env
     # GPU-NORTH Phase 3: publish the app API to the WireGuard peer, so a hub running on the
-    # GPU host can reach it at http://10.10.0.1:8000/nomad-oasis/api/v1. Bound to a single IP
+    # GPU host can reach it at http://10.10.0.1:8000/backend/api/v1. Bound to a single IP
     # -- NEVER 0.0.0.0, which would expose an unauthenticated-by-default API to the campus.
     #
     # Defaults to loopback so any host without wg0 still starts normally; samarium sets
@@ -299,7 +299,7 @@ services:
     # `default deny (incoming)`, so this also needs:
     #     sudo ufw allow in on wg0 from 10.10.0.2 to any port 8000 proto tcp
     # `ss -tlnp` confirms only the bind, not reachability, so a missing rule looks like a
-    # broken tunnel. Verify from the GPU host with a real request to /nomad-oasis/alive.
+    # broken tunnel. Verify from the GPU host with a real request to /backend/alive.
     #
     # ⚠️ If wg0 is down when Docker starts this container the bind fails with "cannot assign
     # requested address". `restart: unless-stopped` retries until the tunnel is up.
@@ -337,8 +337,11 @@ services:
       - no-new-privileges:true
     command: nginx -g 'daemon off;'
     volumes:
-      # Shared config
+      # Shared config. All three are included by default.conf below; none ends in .conf, so
+      # the image's own conf.d/*.conf glob never loads them a second time.
       - ./configs/nginx_base_conf:/etc/nginx/conf.d/nginx_base_conf:ro
+      - ./configs/nginx_maps_conf:/etc/nginx/conf.d/nginx_maps_conf:ro
+      - ./configs/nginx_proxy_headers_conf:/etc/nginx/conf.d/nginx_proxy_headers_conf:ro
       # HTTP
       # - ./configs/nginx_http.conf:/etc/nginx/conf.d/default.conf:ro
       # HTTPS (you need to have a TLS certificate)
